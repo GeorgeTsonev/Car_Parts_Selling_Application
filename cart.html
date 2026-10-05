@@ -1,0 +1,4 @@
+{% extends "base.html" %}{% block c %}<h2>Cart</h2><table>
+{% for i in items %}<tr><td>{{i.name}} ({{i.material_printed}}, {{i.color}})</td><td>{{i.quantity}} &times; &euro;{{i.price}}</td>
+<td><form method="post" action="/cart/remove/{{i.cart_item_id}}"><button>Remove</button></form></td></tr>{% else %}<tr><td>Empty.</td></tr>{% endfor %}</table>
+{% if items %}<h3>Total &euro;{{'%.2f'|format(total)}}</h3><form method="post" action="/checkout"><textarea name="address" placeholder="Shipping address" required></textarea><button>Place order</button></form>{% endif %}{% endblock %}

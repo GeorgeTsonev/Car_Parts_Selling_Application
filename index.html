@@ -1,0 +1,1266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>ReFit – parts for cars the manufacturer forgot</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap">
+
+  <style>
+    /* ---------- Theme variables ---------- */
+    :root {
+      box-sizing: border-box;
+      padding-top: env(safe-area-inset-top, 0px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+
+      --bg: #eef1f0;
+      --card: #fff;
+      --ink: #16222a;
+      --mut: #58656d;
+      --acc: #0b6e6e;
+      --on: #fff;
+      --line: #d3dadc;
+      --ok: #1f7a45;
+      --mk: #d9480f;
+      --car: #c3ccd2;
+      --win: #e9f0f4;
+    }
+
+    html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #101619;
+        --card: #182025;
+        --ink: #e6ecef;
+        --mut: #9aa8b0;
+        --acc: #3fc1b0;
+        --on: #06201c;
+        --line: #2c373d;
+        --ok: #5cc58a;
+        --mk: #ff8a4c;
+        --car: #46535b;
+        --win: #26323a;
+      }
+    }
+
+    :root[data-theme="dark"] {
+      --bg: #101619;
+      --card: #182025;
+      --ink: #e6ecef;
+      --mut: #9aa8b0;
+      --acc: #3fc1b0;
+      --on: #06201c;
+      --line: #2c373d;
+      --ok: #5cc58a;
+      --mk: #ff8a4c;
+      --car: #46535b;
+      --win: #26323a;
+    }
+
+    /* ---------- Base ---------- */
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.55 Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    a { color: var(--acc); }
+
+    :focus-visible {
+      outline: 3px solid var(--mk);
+      outline-offset: 2px;
+    }
+
+    main {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    h1 {
+      font-size: clamp(28px, 5vw, 44px);
+      line-height: 1.1;
+      margin: .2em 0 .3em;
+      font-weight: 800;
+    }
+
+    h2 {
+      font-size: 22px;
+      margin: .6em 0 .3em;
+    }
+
+    /* ---------- Header & navigation ---------- */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--card);
+      position: sticky;
+      top: env(safe-area-inset-top, 0px);
+      z-index: 5;
+    }
+
+    .logo {
+      display: flex;
+      gap: 9px;
+      align-items: center;
+      font-weight: 800;
+      font-size: 22px;
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .logo i {
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      background: var(--acc);
+      display: inline-block;
+      clip-path: polygon(0 0, 70% 0, 100% 30%, 100% 100%, 0 100%);
+    }
+
+    #nav {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    #nav a:not(.btn) {
+      color: var(--ink);
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    /* ---------- Buttons ---------- */
+    button,
+    .btn {
+      font: inherit;
+      font-weight: 600;
+      background: var(--acc);
+      color: var(--on);
+      border: 0;
+      border-radius: 8px;
+      padding: 9px 16px;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    .ghost {
+      background: transparent;
+      color: var(--ink);
+      border: 1px solid var(--line);
+    }
+
+    .alt {
+      background: var(--ink);
+      color: var(--bg);
+    }
+
+    /* ---------- Forms ---------- */
+    label {
+      display: grid;
+      gap: 4px;
+      font-size: 14px;
+      color: var(--mut);
+      font-weight: 600;
+    }
+
+    select,
+    input,
+    textarea {
+      font: inherit;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--card);
+      color: var(--ink);
+      width: 100%;
+    }
+
+    .sf { display: flex; gap: 8px; }
+    .sf input { flex: 1; }
+
+    /* ---------- Home ---------- */
+    .hero { padding: 34px 0 6px; }
+
+    .hero p {
+      max-width: 60ch;
+      color: var(--mut);
+      margin: 0;
+    }
+
+    .pick {
+      display: grid;
+      grid-template-columns: 1fr 1fr auto;
+      gap: 12px;
+      align-items: end;
+      margin: 24px 0 14px;
+    }
+
+    /* ---------- Part list rows ---------- */
+    .row {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      gap: 14px;
+      align-items: center;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      margin: 10px 0;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .row h3 { margin: 0; font-size: 18px; }
+
+    .row p {
+      margin: 2px 0 6px;
+      color: var(--mut);
+      font-size: 15px;
+    }
+
+    .th {
+      width: 64px;
+      height: 64px;
+      border-radius: 8px;
+      background: var(--bg);
+      display: grid;
+      place-items: center;
+      font-size: 26px;
+      font-weight: 800;
+    }
+
+    .th.big {
+      width: 140px;
+      height: 140px;
+      font-size: 60px;
+    }
+
+    .pr { font-weight: 800; text-align: right; }
+
+    .tag {
+      display: inline-block;
+      font-size: 13px;
+      padding: 1px 9px;
+      border-radius: 99px;
+      border: 1px solid var(--line);
+      margin: 0 4px 4px 0;
+      color: var(--mut);
+    }
+
+    .st-verified_fit {
+      color: var(--ok);
+      border-color: var(--ok);
+    }
+
+    /* ---------- Cards & auth ---------- */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 18px;
+      margin: 14px 0;
+      display: grid;
+      gap: 12px;
+    }
+
+    .auth { max-width: 380px; margin: 30px auto; }
+
+    /* ---------- Car diagram ---------- */
+    .car {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px;
+      margin: 12px 0;
+    }
+
+    .car svg { width: 100%; height: auto; display: block; }
+
+    .body { fill: var(--car); }
+    .win  { fill: var(--win); }
+    .wh   { fill: #1d2429; }
+    .hub  { fill: #9aa4aa; }
+
+    .hs line   { stroke: var(--mk); stroke-width: 2.5; }
+    .hs circle { fill: var(--mk); }
+    .hs text {
+      fill: #fff;
+      font: 800 11px Barlow, sans-serif;
+      text-anchor: middle;
+    }
+
+    /* ---------- Part detail ---------- */
+    .pd {
+      display: grid;
+      grid-template-columns: 140px 1fr;
+      gap: 20px;
+      margin: 16px 0;
+    }
+
+    .act {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin: 14px 0;
+    }
+
+    .cols {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+
+    dl {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 14px;
+      margin: 0;
+    }
+
+    dt { color: var(--mut); }
+    dd { margin: 0; }
+
+    /* ---------- Profile ---------- */
+    .av {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: var(--acc);
+      color: var(--on);
+      display: grid;
+      place-items: center;
+      font-size: 30px;
+      font-weight: 800;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    .av img { width: 100%; height: 100%; object-fit: cover; }
+
+    .prof {
+      grid-template-columns: auto 1fr;
+      align-items: center;
+    }
+
+    /* ---------- Toast & utilities ---------- */
+    #toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+      transform: translateX(-50%);
+      background: var(--ink);
+      color: var(--bg);
+      padding: 10px 16px;
+      border-radius: 8px;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s;
+      max-width: 90%;
+    }
+
+    #toast.on { opacity: 1; }
+
+    .mut { color: var(--mut); }
+    .err { color: #c0392b; margin: 0; }
+    .tot { font-weight: 800; font-size: 20px; }
+
+    /* ---------- Mobile ---------- */
+    @media (max-width: 640px) {
+      .pick, .pd { grid-template-columns: 1fr; }
+      .row { grid-template-columns: 48px 1fr; }
+      .pr { grid-column: 2; text-align: left; }
+      .th { width: 48px; height: 48px; }
+    }
+  </style>
+</head>
+
+<body>
+  <header>
+    <a class="logo" href="#/"><i></i>ReFit</a>
+    <div id="nav"></div>
+  </header>
+
+  <main id="app"></main>
+  <div id="toast" role="status"></div>
+
+  <script>
+    /* =====================================================
+       State
+       ===================================================== */
+    const COL = ['brands', 'models', 'generations', 'parts', 'compat', 'part_files', 'users'];
+
+    const CAT = {
+      interior: '🛋️',
+      exterior: '🚗',
+      underhood: '⚙️',
+      trim_clip: '📎',
+      lighting_bracket: '💡'
+    };
+
+    const ST = {
+      draft: 'Draft',
+      community_tested: 'Community tested',
+      verified_fit: 'Verified fit',
+      flagged: 'Flagged'
+    };
+
+    let me = null;                       // current user profile
+    let cart = ls_get('rf_cart', []);    // part ids in cart
+    let next = '';                       // hash to return to after login
+    let M = [], U = {}, B = [], G = [], P = [];  // models, users, brands, generations, parts
+    let db = null, usr = null, uid = '', isAdmin = false, assets = null, dlc = null;
+
+    /* =====================================================
+       Helpers
+       ===================================================== */
+    const $ = selector => document.querySelector(selector);
+
+    const esc = s => String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+
+    function ls_get(key, fallback) {
+      try {
+        const v = localStorage.getItem(key);
+        return v ? JSON.parse(v) : fallback;
+      } catch (e) {
+        return fallback;
+      }
+    }
+
+    function ls_set(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+
+    const all = () => P;
+    const find = id => P.find(p => p.id == id);
+    const money = n => '€' + n.toFixed(2);
+    const view = html => { $('#app').innerHTML = html; };
+
+    const toast = message => {
+      const el = $('#toast');
+      el.textContent = message;
+      el.classList.add('on');
+      clearTimeout(toast.timer);
+      toast.timer = setTimeout(() => el.classList.remove('on'), 2800);
+    };
+
+    const err = message => {
+      $('#err').textContent = message;
+      return false;
+    };
+
+    function gname(generationId) {
+      const g = G.find(v => v.id == generationId);
+      if (!g) return '';
+      const brand = B.find(b => b.id == g.b).n;
+      return `${brand} ${g.m} ${g.g} (${g.y})`;
+    }
+
+    /* =====================================================
+       Data loading
+       ===================================================== */
+    const readCollection = async name =>
+      (await db.collection(name).get()).docs.map(d => ({ id: d.id, ...d.data() }));
+
+    async function load() {
+      const [brands, models, generations, parts, compat, partFiles, users] =
+        await Promise.all(COL.map(readCollection));
+
+      M = models;
+      U = Object.fromEntries(users.map(u => [u.id, u]));
+      B = brands
+        .map(b => ({ id: b.id, n: b.name }))
+        .sort((a, b) => a.n.localeCompare(b.n));
+
+      const modelById = Object.fromEntries(models.map(m => [m.id, m]));
+
+      G = generations.map(g => ({
+        id: g.id,
+        b: modelById[g.model_id]?.brand_id,
+        m: modelById[g.model_id]?.name || '',
+        g: g.generation_name || '',
+        y: g.start_year + '–' + (g.end_year || '')
+      }));
+
+      // k: 'buy' = physical only, 'print' = 3D file only, 'both' = either
+      P = parts.map(x => {
+        const file = partFiles.find(f => f.part_id == x.id);
+        return {
+          id: x.id,
+          name: x.name,
+          cat: x.category,
+          oem: x.oem_part_number || '',
+          g: compat.filter(c => c.part_id == x.id).map(c => c.generation_id),
+          pos: [x.hotspot_x || 300, x.hotspot_y || 150],
+          k: x.is_available_physical ? (file ? 'both' : 'buy') : 'print',
+          mat: file?.recommended_material || x.print_material || 'PETG',
+          inf: file?.recommended_infill_pct || 0,
+          sup: file?.supports_required ? 1 : 0,
+          price: x.physical_print_price || 0,
+          st: x.status || 'draft',
+          au: U[x.author_user_id]?.name || 'Unknown',
+          lic: x.license,
+          d: x.description || '',
+          steps: x.removal_steps || [],
+          asm: !!x.is_assembly,
+          file: file,
+          owner: x.author_user_id
+        };
+      });
+    }
+
+    /* =====================================================
+       Shared UI fragments
+       ===================================================== */
+    function nav() {
+      const cartLink = `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`;
+      const adminLink = isAdmin ? '<a href="#/admin">Admin</a>' : '';
+      const userLink = me
+        ? `<a href="#/profile">${esc(me.name)}</a>`
+        : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`;
+      $('#nav').innerHTML = cartLink + adminLink + userLink;
+    }
+
+    function tags(p) {
+      return (p.k != 'buy' ? '<span class="tag">3D file</span>' : '')
+        + (p.k != 'print' ? `<span class="tag">Printed, ${money(p.price)}</span>` : '')
+        + (p.asm ? '<span class="tag">Snap-together</span>' : '')
+        + `<span class="tag st-${p.st}">${ST[p.st]}</span>`;
+    }
+
+    function row(p, badge) {
+      const price = p.k == 'print'
+        ? 'Free STL'
+        : (p.k == 'both' ? 'From ' : '') + money(p.price);
+
+      return `
+        <a class="row" href="#/part/${p.id}">
+          <div class="th">${badge || CAT[p.cat]}</div>
+          <div>
+            <h3>${esc(p.name)}</h3>
+            <p>${esc(p.d)}</p>
+            <div>${tags(p)}</div>
+          </div>
+          <div class="pr">${price}</div>
+        </a>`;
+    }
+
+    function sform(q) {
+      return `
+        <form class="sf" onsubmit="return doSearch(event)" role="search">
+          <input id="q" value="${esc(q || '')}"
+                 placeholder="Search a part, OEM number or car, e.g. cupholder Golf"
+                 aria-label="Search parts">
+          <button>Search</button>
+        </form>`;
+    }
+
+    /* =====================================================
+       Home & search
+       ===================================================== */
+    function home() {
+      const brandOptions = B.map(b => `<option value="${b.id}">${b.n}</option>`).join('');
+      const emptyNote = B.length
+        ? ''
+        : '<p class="mut">The catalog is empty.'
+          + (isAdmin ? ' <a href="#/admin">Import a catalog</a>.' : '') + '</p>';
+
+      view(`
+        <section class="hero">
+          <h1>A cracked plastic clip shouldn't scrap a good car.</h1>
+          <p>Find parts discontinued for cars over ten years old. Buy them printed, or download the 3D file and print them yourself.</p>
+
+          <div class="pick">
+            <label>Car brand
+              <select id="sb" onchange="fillM()">
+                <option value="">Choose a brand</option>${brandOptions}
+              </select>
+            </label>
+            <label>Model<select id="sm"></select></label>
+            <button onclick="goCar()">Show parts</button>
+          </div>
+
+          ${emptyNote}
+          ${sform()}
+        </section>`);
+      fillM();
+    }
+
+    function fillM() {
+      const brandId = +$('#sb').value;
+      const options = G
+        .filter(g => g.b == brandId)
+        .map(g => `<option value="${g.id}">${esc(g.m)} ${esc(g.g)} (${g.y})</option>`)
+        .join('');
+
+      $('#sm').innerHTML =
+        `<option value="">${brandId ? 'Choose a model' : 'Pick a brand first'}</option>` + options;
+      $('#sm').disabled = !brandId;
+    }
+
+    function goCar() {
+      const v = $('#sm').value;
+      v ? (location.hash = '#/car/' + v) : toast('Choose a brand and a model first.');
+    }
+
+    function doSearch(e) {
+      e.preventDefault();
+      const q = $('#q').value.trim();
+      if (q) location.hash = '#/search/' + encodeURIComponent(q);
+      return false;
+    }
+
+    function search(q) {
+      const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+
+      const results = all().filter(p => {
+        const haystack = [p.name, p.d, p.oem, p.cat.replace('_', ' '), p.g.map(gname).join(' ')]
+          .join(' ').toLowerCase();
+        return terms.every(w => haystack.includes(w));
+      });
+
+      view(`
+        ${sform(q)}
+        <h1>${results.length} result${results.length == 1 ? '' : 's'} for “${esc(q)}”</h1>
+        ${results.map(p => row(p)).join('')
+          || '<p class="mut">No parts match. Try fewer words, or search by the OEM number.</p>'}`);
+    }
+
+    /* =====================================================
+       Car page (diagram with hotspots)
+       ===================================================== */
+    function car(id) {
+      const gen = G.find(x => x.id == id);
+      if (!gen) return home();
+
+      const parts = all().filter(p => p.g.includes(gen.id));
+
+      const hotspots = parts.map((p, i) => {
+        const [x, y] = p.pos;
+        return `
+          <a href="#/part/${p.id}">
+            <g class="hs">
+              <line x1="${x}" y1="${y - 20}" x2="${x}" y2="${y - 3}" marker-end="url(#ar)"/>
+              <circle cx="${x}" cy="${y - 30}" r="10"/>
+              <text x="${x}" y="${y - 26}">${i + 1}</text>
+              <title>${esc(p.name)}</title>
+            </g>
+          </a>`;
+      }).join('');
+
+      view(`
+        <a href="#/">← Change car</a>
+        <h1>${esc(gname(id))}</h1>
+        <p class="mut">${parts.length} parts available. Select a numbered arrow or a part below.</p>
+
+        <div class="car">
+          <svg viewBox="0 0 600 260" role="img" aria-label="Side view of the car with part locations">
+            <defs>
+              <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5"
+                      markerWidth="6" markerHeight="6" orient="auto">
+                <path d="M0 0L10 5L0 10z" fill="var(--mk)"/>
+              </marker>
+            </defs>
+
+            <path class="body" d="M30 178L30 152Q32 136 70 130L178 112L214 82Q232 68 268 68L392 68Q432 70 452 100L536 120Q568 128 570 152L570 178Z"/>
+            <path class="win" d="M222 88L262 76L318 76L318 110L202 110Z"/>
+            <path class="win" d="M326 76L392 76Q420 80 436 108L326 110Z"/>
+
+            <circle class="wh"  cx="150" cy="182" r="34"/>
+            <circle class="hub" cx="150" cy="182" r="14"/>
+            <circle class="wh"  cx="450" cy="182" r="34"/>
+            <circle class="hub" cx="450" cy="182" r="14"/>
+
+            ${hotspots}
+          </svg>
+        </div>
+
+        <h2>All parts for this car</h2>
+        ${parts.map((p, i) => row(p, i + 1)).join('')
+          || '<p class="mut">No parts yet. Be the first to upload one from your profile.</p>'}`);
+    }
+
+    /* =====================================================
+       Part page
+       ===================================================== */
+    function part(id) {
+      const p = find(id);
+      if (!p) return home();
+
+      const downloadBtn = p.k != 'buy'
+        ? `<button onclick="dl(${p.id})">Download 3D file</button>` : '';
+      const cartBtn = p.k != 'print'
+        ? `<button class="alt" onclick="add(${p.id})">Add to cart, ${money(p.price)}</button>` : '';
+      const loginHint = me
+        ? ''
+        : '<p class="mut">You need a free account to download or buy. <a href="#/login" onclick="next=location.hash">Log in</a></p>';
+
+      const printDetails = p.k != 'buy'
+        ? `<dt>Material</dt><dd>${p.mat.replace('_', ' ')}</dd>
+           <dt>Infill</dt><dd>${p.inf}%</dd>
+           <dt>Supports</dt><dd>${p.sup ? 'Needed' : 'Not needed'}</dd>`
+        : `<dt>Printed in</dt><dd>${p.mat.replace('_', ' ')}</dd>`;
+
+      const fits = p.g
+        .map(g => `<li><a href="#/car/${g}">${esc(gname(g))}</a></li>`)
+        .join('') || '<li class="mut">Fitment not set yet</li>';
+
+      view(`
+        <a href="javascript:history.back()">← Back</a>
+
+        <div class="pd">
+          <div class="th big">${CAT[p.cat]}</div>
+          <div>
+            <h1>${esc(p.name)}</h1>
+            <p>${esc(p.d)}</p>
+            <div>${tags(p)}</div>
+            <div class="act">${downloadBtn}${cartBtn}</div>
+            ${loginHint}
+          </div>
+        </div>
+
+        <div class="cols">
+          <section>
+            <h2>Removing the old part</h2>
+            <ol>${p.steps.map(s => `<li>${esc(s)}</li>`).join('')}</ol>
+          </section>
+
+          <section>
+            <h2>Details</h2>
+            <dl>
+              <dt>OEM number</dt><dd>${esc(p.oem || 'Not listed')}</dd>
+              ${printDetails}
+              <dt>License</dt><dd>${p.lic}</dd>
+              <dt>Author</dt><dd>${esc(p.au)}</dd>
+            </dl>
+          </section>
+
+          <section>
+            <h2>Fits</h2>
+            <ul>${fits}</ul>
+          </section>
+        </div>`);
+    }
+
+    /* =====================================================
+       Login gate, download, cart, checkout
+       ===================================================== */
+    function gate() {
+      if (!db) {
+        toast('Open this page while signed in to claude.ai.');
+        return false;
+      }
+      next = location.hash;
+      toast('Create your profile to continue.');
+      location.hash = '#/signup';
+      return false;
+    }
+
+    async function dl(id) {
+      if (!me) return gate();
+
+      const file = find(id).file;
+
+      // Log the download attempt (fire and forget)
+      db.collection('download_logs').doc(String(Date.now())).set({
+        part_id: id,
+        file_id: file?.id || '',
+        user_id: uid,
+        downloaded_at: new Date().toISOString()
+      }).catch(() => {});
+
+      if (!file?.asset_id) return toast('No file is attached to this part yet.');
+
+      try {
+        const blob = await (await fetch('/_blob/' + file.asset_id)).blob();
+        await dlc.save({ filename: file.file_name, data: blob });
+      } catch (e) {
+        toast('The download was cancelled or failed.');
+      }
+    }
+
+    function add(id) {
+      if (!me) return gate();
+      cart.push(id);
+      ls_set('rf_cart', cart);
+      nav();
+      toast('Added to cart.');
+    }
+
+    function rm(index) {
+      cart.splice(index, 1);
+      ls_set('rf_cart', cart);
+      nav();
+      cartv();
+    }
+
+    function cartv() {
+      const items = cart.map(find).filter(Boolean);
+      const total = items.reduce((sum, p) => sum + p.price, 0);
+
+      const rows = items.map((p, i) => `
+        <div class="row">
+          <div class="th">${CAT[p.cat]}</div>
+          <div>
+            <h3>${esc(p.name)}</h3>
+            <p>Printed in ${p.mat.replace('_', ' ')}</p>
+          </div>
+          <div class="pr">
+            ${money(p.price)}<br>
+            <button class="ghost" onclick="rm(${i})">Remove</button>
+          </div>
+        </div>`).join('');
+
+      view(`
+        <h1>Your cart</h1>
+        ${items.length
+          ? rows + `
+            <p class="tot">Total ${money(total)}</p>
+            <label>Shipping address<textarea id="ship" rows="3"></textarea></label>
+            <button onclick="checkout()">Place order</button>`
+          : '<p class="mut">Your cart is empty. <a href="#/">Find a part</a></p>'}`);
+    }
+
+    async function checkout() {
+      if (!me) return gate();
+
+      const address = $('#ship').value.trim();
+      if (!address) return toast('Enter a shipping address.');
+
+      const items = cart.map(find).filter(Boolean);
+
+      try {
+        await db.doc('orders/' + uid + '/o/' + Date.now()).set({
+          user_id: uid,
+          total_amount: items.reduce((sum, p) => sum + p.price, 0),
+          order_status: 'pending_payment',
+          shipping_address: address,
+          created_at: new Date().toISOString(),
+          items: items.map(p => ({
+            part_id: p.id,
+            quantity: 1,
+            unit_price: p.price,
+            material_printed: p.mat,
+            color: 'Black'
+          }))
+        });
+
+        cart = [];
+        ls_set('rf_cart', cart);
+        nav();
+        toast('Order saved as pending payment. Payments are not connected yet.');
+      } catch (e) {
+        toast('Could not place the order.');
+      }
+
+      cartv();
+    }
+
+    /* =====================================================
+       Account & profile
+       ===================================================== */
+    function authForm(mode) {
+      if (!db) {
+        return view(`
+          <div class="card auth">
+            <h1>Sign in to continue</h1>
+            <p class="mut">Open this page while signed in to claude.ai.</p>
+          </div>`);
+      }
+
+      view(`
+        <form class="card auth" onsubmit="return auth(event)">
+          <h1>${me ? 'Edit your username' : 'Create your profile'}</h1>
+          <p class="mut">Accounts use your claude.ai sign-in, so there is no separate password.</p>
+          <label>Username
+            <input name="name" required minlength="2" value="${esc(me?.name || '')}">
+          </label>
+          <button>Save and continue</button>
+        </form>`);
+    }
+
+    async function auth(e) {
+      e.preventDefault();
+      const name = new FormData(e.target).get('name');
+
+      const defaults = {
+        bio: '', phone: '', pic: '', email: '',
+        role: 'consumer', reputation_score: 0,
+        created_at: new Date().toISOString()
+      };
+
+      me = { ...(me || defaults), id: uid, name };
+      await sync();
+      nav();
+
+      const target = next || '#/profile';
+      next = '';
+      location.hash = target;
+      return false;
+    }
+
+    async function sync() {
+      const { id, ...data } = me;
+      try {
+        await db.collection('users').doc(uid).set(data);
+        U[uid] = data;
+      } catch (e) {
+        toast('Could not save your profile.');
+      }
+    }
+
+    function profile() {
+      if (!me) {
+        next = '#/profile';
+        return (location.hash = '#/login');
+      }
+
+      const mine = P.filter(p => p.owner == uid);
+
+      const avatar = me.pic
+        ? `<img src="${me.pic}" alt="Profile picture">`
+        : esc(me.name[0].toUpperCase());
+
+      const genOptions = G.map(g => `<option value="${g.id}">${esc(gname(g.id))}</option>`).join('');
+      const catOptions = Object.keys(CAT).map(c => `<option>${c}</option>`).join('');
+
+      view(`
+        <div class="card prof">
+          <label class="av" title="Change picture">
+            ${avatar}
+            <input type="file" accept="image/*" hidden onchange="pic(this)">
+          </label>
+          <div>
+            <h1>${esc(me.name)}</h1>
+            <span class="mut">${esc(me.email)}</span>
+          </div>
+        </div>
+
+        <form class="card" onsubmit="return save(event)">
+          <h2>About you</h2>
+          <label>Short bio<textarea name="bio" rows="3">${esc(me.bio)}</textarea></label>
+          <label>Contact (phone, forum, social)<input name="phone" value="${esc(me.phone)}"></label>
+          <button>Save profile</button>
+        </form>
+
+        <form class="card" onsubmit="return up(event)">
+          <h2>Share a 3D part</h2>
+          <label>Part name<input name="name" required></label>
+          <label>Description<textarea name="d" rows="2" required></textarea></label>
+          <label>Fits<select name="g">${genOptions}</select></label>
+          <label>Category<select name="cat">${catOptions}</select></label>
+          <label>License
+            <select name="lic">
+              <option>CC-BY-SA-4.0</option>
+              <option>CC-BY-4.0</option>
+              <option>CC0</option>
+            </select>
+          </label>
+          <label>3D file (STL, 3MF or STEP)
+            <input name="file" type="file" accept=".stl,.3mf,.step,.stp" required>
+          </label>
+          <button>Publish as draft</button>
+        </form>
+
+        <h2>My creations</h2>
+        ${mine.map(p => row(p)).join('')
+          || '<p class="mut">Nothing uploaded yet. Share your first part above.</p>'}`);
+    }
+
+    function save(e) {
+      e.preventDefault();
+      const form = new FormData(e.target);
+      me.bio = form.get('bio');
+      me.phone = form.get('phone');
+      sync();
+      toast('Profile saved.');
+      return false;
+    }
+
+    async function pic(input) {
+      const file = input.files[0];
+      if (!file) return;
+      if (!assets) return toast('Picture upload is not available for your account.');
+
+      try {
+        me.pic = (await assets.upload(file)).url;
+        await sync();
+        profile();
+      } catch (e) {
+        toast('Upload failed.');
+      }
+    }
+
+    async function up(e) {
+      e.preventDefault();
+
+      const form = new FormData(e.target);
+      const file = form.get('file');
+      const id = String(Date.now());
+      const ext = file.name.split('.').pop().toLowerCase();
+      const fileType = { '3mf': 'mesh_3mf', step: 'cad_step', stp: 'cad_step' }[ext] || 'mesh_stl';
+      let assetId = '';
+
+      try {
+        if (assets) assetId = (await assets.upload(file)).id;
+
+        await db.collection('parts').doc(id).set({
+          name: form.get('name'),
+          sku: 'U-' + id,
+          description: form.get('d'),
+          category: form.get('cat'),
+          author_user_id: uid,
+          license: form.get('lic'),
+          version: '1.0.0',
+          is_assembly: false,
+          is_available_physical: false,
+          status: 'draft',
+          hotspot_x: 300,
+          hotspot_y: 150,
+          removal_steps: ['The author has not added removal steps yet.'],
+          print_material: 'PETG'
+        });
+
+        await db.collection('compat').doc(id + '-' + form.get('g')).set({
+          part_id: id,
+          generation_id: form.get('g')
+        });
+
+        await db.collection('part_files').doc(id).set({
+          part_id: id,
+          file_type: fileType,
+          file_name: file.name,
+          asset_id: assetId,
+          recommended_material: 'PETG',
+          recommended_infill_pct: 40,
+          supports_required: false
+        });
+
+        await load();
+        toast(assetId
+          ? 'Published as a draft.'
+          : 'Saved as a draft without a file: uploads are not available for your account.');
+      } catch (x) {
+        toast('Could not publish the part.');
+      }
+
+      profile();
+      return false;
+    }
+
+    /* =====================================================
+       Admin
+       ===================================================== */
+    const writeDoc = async (collection, id, data) => {
+      try {
+        await db.collection(collection).doc(String(id)).set(data);
+        await load();
+        toast('Saved.');
+      } catch (e) {
+        toast('Could not save.');
+      }
+      admin();
+    };
+
+    const addB = e => {
+      e.preventDefault();
+      writeDoc('brands', Date.now(), { name: new FormData(e.target).get('n') });
+      return false;
+    };
+
+    const addM = e => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      writeDoc('models', Date.now(), { brand_id: f.get('b'), name: f.get('n') });
+      return false;
+    };
+
+    const addG = e => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const data = {
+        model_id: f.get('m'),
+        generation_name: f.get('n'),
+        start_year: +f.get('s')
+      };
+      if (f.get('e')) data.end_year = +f.get('e');
+      writeDoc('generations', Date.now(), data);
+      return false;
+    };
+
+    async function setSt(id, status) {
+      try {
+        await db.collection('parts').doc(id).update({ status });
+        await load();
+        toast('Status updated.');
+      } catch (e) {
+        toast('Could not update.');
+      }
+    }
+
+    async function delP(id) {
+      if (!confirm('Delete this part and its files?')) return;
+
+      try {
+        for (const c of ['compat', 'part_files']) {
+          for (const doc of (await db.collection(c).get()).docs) {
+            if (doc.data().part_id == id) await db.collection(c).doc(doc.id).delete();
+          }
+        }
+        await db.collection('parts').doc(id).delete();
+        await load();
+        toast('Part deleted.');
+      } catch (e) {
+        toast('Could not delete.');
+      }
+
+      admin();
+    }
+
+    async function imp(input) {
+      try {
+        const json = JSON.parse(await input.files[0].text());
+        let count = 0;
+
+        for (const c of COL) {
+          for (const id in json[c] || {}) {
+            await db.collection(c).doc(id).set(json[c][id]);
+            count++;
+          }
+        }
+
+        await load();
+        toast(count + ' records imported.');
+      } catch (e) {
+        toast('Import failed. Check the file format.');
+      }
+
+      admin();
+    }
+
+    function admin() {
+      if (!isAdmin) return home();
+
+      const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
+      const modelOpts = M.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+
+      const partRows = P.map(p => `
+        <div class="row" style="grid-template-columns:1fr auto auto">
+          <div><b>${esc(p.name)}</b><br><span class="mut">by ${esc(p.au)}</span></div>
+          <select onchange="setSt('${p.id}', this.value)" aria-label="Status">
+            ${Object.keys(ST).map(s =>
+              `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
+          </select>
+          <button class="ghost" onclick="delP('${p.id}')">Delete</button>
+        </div>`).join('');
+
+      view(`
+        <h1>Admin</h1>
+
+        <div class="card">
+          <h2>Import a catalog</h2>
+          <p class="mut">Load a JSON file with the collections ${COL.join(', ')}. Records with the same id are replaced.</p>
+          <input type="file" accept=".json" onchange="imp(this)">
+        </div>
+
+        <div class="card">
+          <h2>Add a brand, model or generation</h2>
+
+          <form class="sf" onsubmit="return addB(event)">
+            <input name="n" placeholder="Brand name" required>
+            <button>Add brand</button>
+          </form>
+
+          <form class="sf" onsubmit="return addM(event)">
+            <select name="b">${brandOpts}</select>
+            <input name="n" placeholder="Model name" required>
+            <button>Add model</button>
+          </form>
+
+          <form class="sf" onsubmit="return addG(event)">
+            <select name="m">${modelOpts}</select>
+            <input name="n" placeholder="Generation, e.g. Mk4">
+            <input name="s" type="number" placeholder="Start year" required>
+            <input name="e" type="number" placeholder="End year">
+            <button>Add generation</button>
+          </form>
+        </div>
+
+        <h2>Parts</h2>
+        ${partRows || '<p class="mut">No parts yet.</p>'}`);
+    }
+
+    /* =====================================================
+       Routing & startup
+       ===================================================== */
+    function route() {
+      const [, page, arg] = location.hash.split('/');
+      const param = decodeURIComponent(arg || '');
+      window.scrollTo(0, 0);
+
+      const routes = {
+        car:     () => car(+param),
+        search:  () => search(param),
+        part:    () => part(+param),
+        login:   () => authForm('login'),
+        signup:  () => authForm('signup'),
+        profile: profile,
+        cart:    cartv,
+        admin:   admin
+      };
+
+      (routes[page] || home)();
+    }
+
+    async function init() {
+      addEventListener('hashchange', route);
+      nav();
+      view('<p class="mut">Loading catalog…</p>');
+
+      const use = name => (window.claude ? window.claude.use(name) : null);
+
+      try {
+        usr = await use('user');
+        db = await use('db');
+        assets = await use('assets');
+        dlc = await use('downloads');
+      } catch (e) {}
+
+      if (!db) {
+        view(`
+          <div class="card auth">
+            <h1>Sign in to continue</h1>
+            <p class="mut">Open this page while signed in to claude.ai to load the parts catalog.</p>
+          </div>`);
+        return;
+      }
+
+      try {
+        uid = usr ? String(await usr.id()) : '';
+        isAdmin = !!(usr && usr.canEdit());
+        await load();
+
+        const doc = await db.collection('users').doc(uid).get();
+        if (doc.exists) me = { id: uid, ...doc.data() };
+      } catch (e) {
+        toast('Could not load the catalog.');
+      }
+
+      nav();
+      route();
+    }
+
+    init();
+  </script>
+</body>
+</html>

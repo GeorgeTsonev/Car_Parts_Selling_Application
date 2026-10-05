@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block c %}<h2>Upload a part</h2><form method="post" enctype="multipart/form-data" class="card">
+<input name="name" placeholder="Part name" required><textarea name="description" placeholder="Description"></textarea>
+<input name="oem" placeholder="OEM part number (optional)">
+<div class="row"><select name="category">{% for c in cats %}<option>{{c}}</option>{% endfor %}</select>
+<select name="license"><option>CC-BY-SA-4.0</option><option>CC-BY-4.0</option><option>CC0</option><option>CERN-OHL-P-2.0</option><option>CERN-OHL-S-2.0</option></select>
+<select name="material"><option>ASA</option><option>PETG</option><option>ABS</option><option>PLA</option><option>PA_CF</option><option>TPU</option></select></div>
+<div class="row"><input type="number" name="infill" value="40" min="0" max="100"><label><input type="checkbox" name="supports" style="width:auto"> Supports required</label></div>
+<label>Fits (hold Ctrl to select several)</label><select name="generation" multiple size="6">{% for g in gens %}<option value="{{g.generation_id}}">{{g.label}}</option>{% endfor %}</select>
+<textarea name="disassembly" placeholder="How to remove the old part"></textarea>
+<input type="file" name="file" accept=".stl,.3mf,.step,.stp,.pdf" required><button>Publish as draft</button></form>{% endblock %}
