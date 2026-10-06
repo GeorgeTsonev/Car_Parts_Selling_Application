@@ -419,6 +419,17 @@
     let M = [], U = {}, B = [], G = [], P = [];  // models, users, brands, generations, parts
     let db = null, usr = null, uid = '', isAdmin = false, assets = null, dlc = null;
 
+    const J = { 'Content-Type': 'application/json' };
+    let cartItems = [];
+
+    async function loadCart() {
+      if (!me) { cartItems = []; cart = []; return; }
+      try {
+        const r = await fetch('/api/cart');
+        cartItems = r.ok ? await r.json() : [];
+      } catch (e) { cartItems = []; }
+      cart = cartItems.map(i => i.part_id);
+    }
     /* =====================================================
        Helpers
        ===================================================== */
@@ -767,103 +778,62 @@ const thumb = (p, n) => p.img
 
     async function dl(id) {
       if (!me) return gate();
-
-      const file = find(id).file;
-
-      // Log the download attempt (fire and forget)
-      db.collection('download_logs').doc(String(Date.now())).set({
-        part_id: id,
-        file_id: file?.id || '',
-        user_id: uid,
-        downloaded_at: new Date().toISOString()
-      }).catch(() => {});
-
-      if (!file?.asset_id) return toast('No file is attached to this part yet.');
-
-      try {
-        const blob = await (await fetch('/_blob/' + file.asset_id)).blob();
-        await dlc.save({ filename: file.file_name, data: blob });
-      } catch (e) {
-        toast('The download was cancelled or failed.');
+      const r = await fetch('/api/download/' + id);
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        return toast(typeof d.detail === 'string' ? d.detail : 'The download failed.');
       }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(await r.blob());
+      a.download = find(id).file?.file_name || 'part';
+      a.click();
+      URL.revokeObjectURL(a.href);
     }
-
-    function add(id) {
+    async function add(id) {
       if (!me) return gate();
-      cart.push(id);
-      ls_set('rf_cart', cart);
-      nav();
-      toast('Added to cart.');
+      const r = await fetch('/api/cart', { method: 'POST', headers: J, body: JSON.stringify({ part_id: id }) });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        return toast(typeof d.detail === 'string' ? d.detail : 'Could not add to cart.');
+      }
+      await loadCart(); nav(); toast('Added to cart.');
     }
 
-    function rm(index) {
-      cart.splice(index, 1);
-      ls_set('rf_cart', cart);
-      nav();
-      cartv();
+    async function rm(partId) {
+      await fetch('/api/cart/' + partId, { method: 'DELETE' });
+      await loadCart(); nav(); cartv();
     }
 
     function cartv() {
-      const items = cart.map(find).filter(Boolean);
-      const total = items.reduce((sum, p) => sum + p.price, 0);
-
-      const rows = items.map((p, i) => `
-        <div class="row">
-          <div class="th">${CAT[p.cat]}</div>
-          <div>
-            <h3>${esc(p.name)}</h3>
-            <p>Printed in ${p.mat.replace('_', ' ')}</p>
-          </div>
-          <div class="pr">
-            ${money(p.price)}<br>
-            <button class="ghost" onclick="rm(${i})">Remove</button>
-          </div>
-        </div>`).join('');
-
-      view(`
-        <h1>Your cart</h1>
-        ${items.length
-          ? rows + `
-            <p class="tot">Total ${money(total)}</p>
+      const total = cartItems.reduce((s, i) => s + i.unit_price * i.quantity, 0);
+      const rows = cartItems.map(i => {
+        const p = find(i.part_id);
+        return `<div class="row">
+          <div class="th">${p ? thumb(p) : ''}</div>
+          <div><h3>${esc(i.name)}</h3><p>Printed in ${esc(i.material_printed.replace('_', ' '))}</p></div>
+          <div class="pr">${money(i.unit_price)}<br>
+            <button class="ghost" onclick="rm(${i.part_id})">Remove</button></div>
+        </div>`;
+      }).join('');
+      view(`<h1>Your cart</h1>${cartItems.length
+        ? rows + `<p class="tot">Total ${money(total)}</p>
             <label>Shipping address<textarea id="ship" rows="3"></textarea></label>
             <button onclick="checkout()">Place order</button>`
-          : '<p class="mut">Your cart is empty. <a href="#/">Find a part</a></p>'}`);
+        : '<p class="mut">Your cart is empty. <a href="#/">Find a part</a></p>'}`);
     }
 
     async function checkout() {
       if (!me) return gate();
-
       const address = $('#ship').value.trim();
       if (!address) return toast('Enter a shipping address.');
-
-      const items = cart.map(find).filter(Boolean);
-
-      try {
-        await db.doc('orders/' + uid + '/o/' + Date.now()).set({
-          user_id: uid,
-          total_amount: items.reduce((sum, p) => sum + p.price, 0),
-          order_status: 'pending_payment',
-          shipping_address: address,
-          created_at: new Date().toISOString(),
-          items: items.map(p => ({
-            part_id: p.id,
-            quantity: 1,
-            unit_price: p.price,
-            material_printed: p.mat,
-            color: 'Black'
-          }))
-        });
-
-        cart = [];
-        ls_set('rf_cart', cart);
-        nav();
-        toast('Order saved as pending payment. Payments are not connected yet.');
-      } catch (e) {
-        toast('Could not place the order.');
-      }
-
+      const r = await fetch('/api/checkout', { method: 'POST', headers: J, body: JSON.stringify({ shipping_address: address }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) return toast(typeof d.detail === 'string' ? d.detail : 'Could not place the order.');
+      await loadCart(); nav();
+      toast('Order saved as pending payment. Payments are not connected yet.');
       cartv();
     }
+
 
     /* =====================================================
        Account & profile
@@ -901,6 +871,7 @@ const thumb = (p, n) => p.img
       }
       me = d;
       isAdmin = me.role === 'admin';
+      await loadCart();
       nav();
       const target = next || '#/profile';
       next = '';
@@ -911,6 +882,7 @@ const thumb = (p, n) => p.img
       await fetch('/api/logout', { method: 'POST' });
       me = null;
       isAdmin = false;
+      cartItems = []; cart = [];
       nav();
       location.hash = '#/';
     }
@@ -982,13 +954,11 @@ const thumb = (p, n) => p.img
           || '<p class="mut">Nothing uploaded yet. Share your first part above.</p>'}`);
     }
 
-    function save(e) {
+    async function save(e) {
       e.preventDefault();
-      const form = new FormData(e.target);
-      me.bio = form.get('bio');
-      me.phone = form.get('phone');
-      sync();
-      toast('Profile saved.');
+      const f = new FormData(e.target);
+      const r = await fetch('/api/profile', { method: 'PUT', headers: J, body: JSON.stringify({ bio: f.get('bio'), phone: f.get('phone') }) });
+      if (r.ok) { me = await r.json(); toast('Profile saved.'); } else toast('Could not save your profile.');
       return false;
     }
 
@@ -1237,6 +1207,7 @@ const thumb = (p, n) => p.img
       if (r.ok) me = await r.json();
       isAdmin = !!me && me.role === 'admin';
     } catch (e) {}
+    await loadCart();
     nav();
     route();
   }

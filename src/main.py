@@ -161,6 +161,116 @@ async def me_route(request: Request):
     u = await current_user(request, request.scope["env"])
     return public_user(u) if u else None
 
+class CartIn(BaseModel):
+    part_id: int
+
+
+class CheckoutIn(BaseModel):
+    shipping_address: str
+
+
+class ProfileIn(BaseModel):
+    bio: str = ""
+    phone: str = ""
+
+
+async def require_user(request):
+    u = await current_user(request, request.scope["env"])
+    if not u:
+        raise HTTPException(401, "Please log in.")
+    return u
+
+
+CART_SQL = """
+    SELECT c.part_id, c.quantity, c.material_printed, p.name,
+           COALESCE(p.physical_print_price, 0) AS unit_price
+    FROM Cart_Items c JOIN Parts p ON p.part_id = c.part_id
+    WHERE c.user_id = ? ORDER BY c.cart_item_id"""
+
+
+@app.get("/api/cart")
+async def get_cart(request: Request):
+    user = await require_user(request)
+    return await q(request.scope["env"], CART_SQL, user["user_id"])
+
+
+@app.post("/api/cart")
+async def add_to_cart(data: CartIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    ok = await q(env, "SELECT part_id FROM Parts WHERE part_id = ? "
+                      "AND is_available_physical = 1 AND physical_print_price IS NOT NULL",
+                 data.part_id)
+    if not ok:
+        raise HTTPException(400, "This part is not available as a printed item.")
+    await run(env, "INSERT OR IGNORE INTO Cart_Items(user_id, part_id) VALUES(?, ?)",
+              user["user_id"], data.part_id)
+    return {"ok": True}
+
+
+@app.delete("/api/cart/{part_id}")
+async def remove_from_cart(part_id: int, request: Request):
+    user = await require_user(request)
+    await run(request.scope["env"],
+              "DELETE FROM Cart_Items WHERE user_id = ? AND part_id = ?",
+              user["user_id"], part_id)
+    return {"ok": True}
+
+
+@app.post("/api/checkout")
+async def checkout(data: CheckoutIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    address = data.shipping_address.strip()
+    if not address or len(address) > 500:
+        raise HTTPException(400, "Enter a shipping address.")
+    items = await q(env, CART_SQL, user["user_id"])
+    if not items:
+        raise HTTPException(400, "Your cart is empty.")
+    total = round(sum(i["unit_price"] * i["quantity"] for i in items), 2)
+    order = await q(env, "INSERT INTO Physical_Orders(user_id, total_amount, shipping_address) "
+                         "VALUES(?, ?, ?) RETURNING order_id",
+                    user["user_id"], total, address)
+    order_id = order[0]["order_id"]
+    for i in items:
+        await run(env, "INSERT INTO Physical_Order_Items(order_id, part_id, quantity, unit_price, material_printed) "
+                       "VALUES(?, ?, ?, ?, ?)",
+                  order_id, i["part_id"], i["quantity"], i["unit_price"], i["material_printed"])
+    await run(env, "DELETE FROM Cart_Items WHERE user_id = ?", user["user_id"])
+    return {"order_id": order_id, "total": total, "status": "pending"}
+
+
+@app.put("/api/profile")
+async def update_profile(data: ProfileIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    await run(env, "UPDATE Users SET bio = ?, contact_info = ? WHERE user_id = ?",
+              data.bio[:1000], data.phone[:255], user["user_id"])
+    rows = await q(env, "SELECT * FROM Users WHERE user_id = ?", user["user_id"])
+    return public_user(rows[0])
+
+
+@app.get("/api/download/{part_id}")
+async def download(part_id: int, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    files = await q(env, "SELECT file_id, r2_object_key, file_name FROM Part_Files "
+                         "WHERE part_id = ? ORDER BY file_id LIMIT 1", part_id)
+    if not files:
+        raise HTTPException(404, "No file is attached to this part yet.")
+    f = files[0]
+    obj = await env.BUCKET.get(f["r2_object_key"])
+    if obj is None:
+        raise HTTPException(404, "File not found in storage.")
+    data = bytes((await obj.arrayBuffer()).to_py())
+    await run(env, "INSERT INTO Part_Download_Logs(part_id, file_id, user_id, ip_country) "
+                   "VALUES(?, ?, ?, ?)",
+              part_id, f["file_id"], user["user_id"],
+              (request.headers.get("cf-ipcountry") or "")[:2])
+    safe = f["file_name"].replace('"', "").replace("\n", "")
+    return Response(content=data, media_type="application/octet-stream",
+                    headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await asgi.fetch(app, request.js_object, self.env)
