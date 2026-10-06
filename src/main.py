@@ -10,7 +10,8 @@ async def q(env, sql, *args):
     if args:
         stmt = stmt.bind(*args)
     res = await stmt.all()
-    return res.results.to_py()
+    rows = res.results
+    return [r.to_py() if hasattr(r, "to_py") else r for r in rows]
 
 
 @app.get("/api/health")
