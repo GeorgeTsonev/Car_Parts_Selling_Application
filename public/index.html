@@ -653,14 +653,15 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Car page (diagram with hotspots)
        ===================================================== */
-    function car(id) {
+   function car(id) {
       const gen = G.find(x => x.id == id);
       if (!gen) return home();
 
       const parts = all().filter(p => p.g.includes(gen.id));
 
       const hotspots = parts.map((p, i) => {
-        const [px, py] = p.hot[gen.id]; const x = px * 6, y = py * 2.6;
+        const h = (p.hot && p.hot[gen.id]) || [50, 50];
+        const x = h[0] * 6, y = h[1] * 2.6;
         return `
           <a href="#/part/${p.id}">
             <g class="hs">
@@ -680,21 +681,17 @@ const thumb = (p, n) => p.img
         <div class="car">
           <svg viewBox="0 0 600 260" role="img" aria-label="Side view of the car with part locations">
             <defs>
-              <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5"
-                      markerWidth="6" markerHeight="6" orient="auto">
+              <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
                 <path d="M0 0L10 5L0 10z" fill="var(--mk)"/>
               </marker>
             </defs>
-
             <path class="body" d="M30 178L30 152Q32 136 70 130L178 112L214 82Q232 68 268 68L392 68Q432 70 452 100L536 120Q568 128 570 152L570 178Z"/>
             <path class="win" d="M222 88L262 76L318 76L318 110L202 110Z"/>
             <path class="win" d="M326 76L392 76Q420 80 436 108L326 110Z"/>
-
             <circle class="wh"  cx="150" cy="182" r="34"/>
             <circle class="hub" cx="150" cy="182" r="14"/>
             <circle class="wh"  cx="450" cy="182" r="34"/>
             <circle class="hub" cx="450" cy="182" r="14"/>
-
             ${hotspots}
           </svg>
         </div>
