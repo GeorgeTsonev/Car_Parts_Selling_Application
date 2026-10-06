@@ -55,7 +55,10 @@ CREATE TABLE Parts (
   physical_print_price REAL,
   status TEXT DEFAULT 'draft' CHECK (status IN ('draft','community_tested','verified_fit','flagged')),
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  manufacturing_technique TEXT CHECK (manufacturing_technique IN ('FDM','SLS','SLA','CNC')),
+  material TEXT CHECK (material IN ('PLA','PETG','ABS','ASA','PA_CF','TPU')),
+  manufacturing_specs TEXT
 );
 
 CREATE TABLE Part_Compatibilities (

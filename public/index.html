@@ -415,6 +415,14 @@
     .prevlink { display: block; width: fit-content; max-width: 100%; border-radius: 10px; }
     .prevlink img { transition: transform .15s, box-shadow .15s; }
     .prevlink:hover img { transform: scale(1.02); box-shadow: 0 6px 18px rgba(0, 0, 0, .18); }
+    .tech { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 0; display: grid; gap: 10px; }
+    .tech legend { font-weight: 600; color: var(--mut); padding: 0 6px; font-size: 14px; }
+    .techbtns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .techbtn { display: block; position: relative; }
+    .techbtn input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; margin: 0; padding: 0; cursor: pointer; }
+    .techbtn span { display: block; padding: 9px 22px; border: 1px solid var(--line); border-radius: 8px; font-weight: 800; color: var(--ink); background: var(--card); }
+    .techbtn input:checked + span { background: var(--acc); color: var(--on); border-color: var(--acc); }
+    .techbtn input:focus-visible + span { outline: 3px solid var(--mk); outline-offset: 2px; }
   </style>
 </head>
 
@@ -453,6 +461,7 @@
     let next = '';                       // hash to return to after login
     let M = [], U = {}, B = [], G = [], P = [];  // models, users, brands, generations, parts
     let db = null, usr = null, uid = '', isAdmin = false, assets = null, dlc = null;
+    let SPEC = {};
 
     const J = { 'Content-Type': 'application/json' };
     let cartItems = [];
@@ -541,7 +550,7 @@
 
 async function load() {
   const d = await (await fetch('/api/catalog')).json();
-
+  SPEC = d.spec_schema || {};
   M = d.models;
   B = d.brands
   .map(b => ({ id: b.brand_id, n: b.name, logo: b.logo_url }))
@@ -562,6 +571,8 @@ async function load() {
   P = d.parts.map(x => {
     const file = d.files.find(f => f.part_id == x.part_id);
     const comp = d.compat.filter(c => c.part_id == x.part_id);
+    let spec = {};
+    try { spec = JSON.parse(x.manufacturing_specs || '{}'); } catch (e) {}
     return {
       id: x.part_id,
       name: x.name,
@@ -571,7 +582,7 @@ async function load() {
       hot: Object.fromEntries(comp.map(c => [c.generation_id, [c.hotspot_x ?? 50, c.hotspot_y ?? 50]])),
       pos: [300, 150],
       k: x.is_available_physical ? (file ? 'both' : 'buy') : 'print',
-      mat: file?.recommended_material || 'PETG',
+      mat: x.material || file?.recommended_material || 'PETG',
       inf: file?.recommended_infill_pct || 0,
       sup: file?.supports_required ? 1 : 0,
       price: x.physical_print_price || 0,
@@ -584,6 +595,7 @@ async function load() {
       file: file,
       owner: x.author_user_id,
       added: x.created_at || '',
+      tech: x.manufacturing_technique || '', spec: spec,
       img: x.image_url || ''
     };
   });
@@ -604,7 +616,8 @@ const thumb = (p, n) => p.img
   }
 
     function tags(p) {
-      return (p.k != 'buy' ? '<span class="tag">3D file</span>' : '')
+      return (p.tech ? `<span class="tag">${esc(p.tech)}</span>` : '')
+        + (p.k != 'buy' ? '<span class="tag">3D file</span>' : '')
         + (p.k != 'print' ? `<span class="tag">Printed, ${money(p.price)}</span>` : '')
         + (p.asm ? '<span class="tag">Snap-together</span>' : '')
         + `<span class="tag st-${p.st}">${ST[p.st]}</span>`;
@@ -798,7 +811,12 @@ const thumb = (p, n) => p.img
            <dt>Infill</dt><dd>${p.inf}%</dd>
            <dt>Supports</dt><dd>${p.sup ? 'Needed' : 'Not needed'}</dd>`
         : `<dt>Printed in</dt><dd>${p.mat.replace('_', ' ')}</dd>`;
-
+      const sch = SPEC[p.tech];
+      const mfgDetails = sch
+        ? `<dt>Technique</dt><dd>${esc(sch.label)}</dd>`
+          + sch.fields.filter(fl => p.spec[fl.key] !== undefined)
+              .map(fl => `<dt>${esc(fl.label)}</dt><dd>${esc(p.spec[fl.key])}</dd>`).join('')
+        : printDetails;
       const fits = p.g
         .map(g => `<li><a href="#/car/${g}">${esc(gname(g))}</a></li>`)
         .join('') || '<li class="mut">Fitment not set yet</li>';
@@ -827,7 +845,7 @@ const thumb = (p, n) => p.img
             <h2>Details</h2>
             <dl>
               <dt>OEM number</dt><dd>${esc(p.oem || 'Not listed')}</dd>
-              ${printDetails}
+              ${mfgDetails}
               <dt>License</dt><dd>${p.lic}</dd>
               <dt>Author</dt><dd>${esc(p.au)}</dd>
             </dl>
@@ -996,6 +1014,18 @@ const thumb = (p, n) => p.img
 
         <form class="card" onsubmit="return up(event)">
           <h2>Share a 3D part</h2>
+          <fieldset class="tech">
+            <legend>Manufacturing technique</legend>
+            <div class="techbtns">
+              ${['CNC', 'FDM', 'SLS', 'SLA'].map(t => `
+                <label class="techbtn">
+                  <input type="radio" name="tech" value="${t}" required onchange="techChanged(this.value)">
+                  <span>${t}</span>
+                </label>`).join('')}
+            </div>
+            <p class="mut" id="techname">Choose how this part is made.</p>
+            <div id="techfields" class="filters"></div>
+          </fieldset>
           <label>Part name<input name="name" required></label>
           <label>Description<textarea name="d" rows="2" required></textarea></label>
           <label>Fits<select name="g">${genOptions}</select></label>
@@ -1035,30 +1065,48 @@ const thumb = (p, n) => p.img
         profile();
       } catch (x) { toast(x.message); }
     }
+    function techChanged(t) {
+      const s = SPEC[t];
+      $('#techname').textContent = s ? s.label : 'Choose how this part is made.';
+      $('#techfields').innerHTML = s ? s.fields.map(specField).join('') : '';
+    }
+
+    function specField(f) {
+      const name = 'spec_' + f.key;
+      const req = f.required ? ' required' : '';
+      const hint = f.hint ? `<small class="mut">${esc(f.hint)}</small>` : '';
+      let input;
+      if (f.type === 'select') {
+        input = `<select name="${name}"${req}>
+          <option value="">${f.required ? 'Choose…' : 'Not specified'}</option>
+          ${f.options.map(o => `<option>${esc(o)}</option>`).join('')}</select>`;
+      } else if (f.type === 'number') {
+        input = `<input name="${name}" type="number" min="${f.min}" max="${f.max}" step="${f.step || 'any'}"${req}>`;
+      } else {
+        input = `<input name="${name}" maxlength="${f.max || 200}"${req}>`;
+      }
+      return `<label>${esc(f.label)}${f.required ? ' *' : ''}${input}${hint}</label>`;
+    }
     async function up(e) {
       e.preventDefault();
       const form = e.target, f = new FormData(form);
-      const btn = form.querySelector('button');
+      const btn = form.querySelector('button:not([type=button])');
       btn.disabled = true;
       try {
+        const specs = {};
+        for (const [k, v] of f.entries()) if (k.startsWith('spec_')) specs[k.slice(5)] = v;
         const file = f.get('file'), img = f.get('image');
         const fileKey = (await uploadRaw('model', file)).key;
         const imageKey = img && img.size ? (await uploadRaw('image', img)).key : '';
         await api('POST', '/api/parts', {
-          name: f.get('name'),
-          description: f.get('d'),
-          category: f.get('cat'),
-          license: f.get('lic'),
-          generation_id: +f.get('g'),
-          file_key: fileKey,
-          image_key: imageKey,
-          steps: f.get('steps') || ''
+          name: f.get('name'), description: f.get('d'), category: f.get('cat'),
+          license: f.get('lic'), generation_id: +f.get('g'),
+          file_key: fileKey, image_key: imageKey, steps: f.get('steps') || '',
+          technique: f.get('tech'), specs
         });
         await load();
         toast('Published as a draft.');
-      } catch (x) {
-        toast(x.message);
-      }
+      } catch (x) { toast(x.message); }
       btn.disabled = false;
       profile();
       return false;

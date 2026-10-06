@@ -6,6 +6,7 @@ from js import crypto, TextEncoder, Uint8Array, Object
 from pyodide.ffi import to_js
 from fastapi import HTTPException, Response
 from pydantic import BaseModel
+import json
 app = FastAPI()
 
 
@@ -57,10 +58,12 @@ async def catalog(request: Request):
                 SELECT p.part_id, p.created_at, p.name, p.description, p.oem_part_number, p.category,
                        p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
                        p.is_available_physical, p.physical_print_price, p.status,
-                       p.author_user_id, u.username AS author
+                       p.author_user_id, u.username AS author, p.manufacturing_technique,
+                       p.material, p.manufacturing_specs
                 FROM Parts p JOIN Users u ON u.user_id = p.author_user_id"""),
             "compat": await q(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities"),
             "files": await public_files(env),
+            "spec_schema": SPEC_SCHEMA,
         }
     except Exception:
         return PlainTextResponse(traceback.format_exc(), status_code=500)
@@ -282,8 +285,8 @@ class PartIn(BaseModel):
     file_key: str
     image_key: str = ""
     steps: str = ""
-    material: str = "PETG"
-    infill: int = 40
+    technique: str
+    specs: dict = {}
 
 
 class AvatarIn(BaseModel):
@@ -356,11 +359,9 @@ async def create_part(data: PartIn, request: Request):
     name, desc = data.name.strip(), data.description.strip()
     if not (3 <= len(name) <= 150) or not desc:
         raise HTTPException(400, "Enter a name (3+ characters) and a description.")
-    if (data.category not in CATEGORIES or data.license not in LICENSES
-            or data.material not in MATERIALS):
-        raise HTTPException(400, "Invalid category, license or material.")
-    if not (5 <= data.infill <= 100):
-        raise HTTPException(400, "Infill must be between 5 and 100.")
+    if data.category not in CATEGORIES or data.license not in LICENSES:
+        raise HTTPException(400, "Invalid category or license.")
+    specs = clean_specs(data.technique, data.specs)
     if not data.file_key.startswith(f"parts/{uid}/"):
         raise HTTPException(400, "Invalid file reference.")
     if data.image_key and not data.image_key.startswith(f"images/{uid}/"):
@@ -379,22 +380,27 @@ async def create_part(data: PartIn, request: Request):
     image_url = public_url(env, data.image_key) if data.image_key else ""
     steps = data.steps.strip()[:4000] or "The author has not added removal steps yet."
 
+    material = specs.get("material", "")
+    file_material = PART_FILE_MATERIALS.get(material, "")
+    infill = int(specs.get("infill_pct", 0))
+    supports = 1 if specs.get("supports") == "Yes" else 0
+
     rows = await q(env,
         "INSERT INTO Parts(sku, name, description, category, disassembly_instructions, "
-        "author_user_id, license, image_url, status) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), 'draft') RETURNING part_id",
+        "author_user_id, license, image_url, manufacturing_technique, material, "
+        "manufacturing_specs, status) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'draft') RETURNING part_id",
         "U-" + secrets.token_hex(6), name, desc, data.category, steps, uid,
-        data.license, image_url)
+        data.license, image_url, data.technique, material, json.dumps(specs))
     pid = rows[0]["part_id"]
 
     await run(env, "INSERT INTO Part_Compatibilities(part_id, generation_id, hotspot_x, hotspot_y) "
                    "VALUES(?, ?, 50, 50)", pid, data.generation_id)
     await run(env, "INSERT INTO Part_Files(part_id, file_type, r2_object_key, file_name, "
-                   "file_size_bytes, recommended_material, recommended_infill_pct) "
-                   "VALUES(?, ?, ?, ?, ?, ?, ?)",
-              pid, ftype, data.file_key, fname, int(head.size), data.material, data.infill)
+                   "file_size_bytes, recommended_material, recommended_infill_pct, supports_required) "
+                   "VALUES(?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)",
+              pid, ftype, data.file_key, fname, int(head.size), file_material, infill, supports)
     return {"part_id": pid}
-
 
 @app.put("/api/profile/avatar")
 async def set_avatar(data: AvatarIn, request: Request):
@@ -530,6 +536,96 @@ async def admin_delete_part(part_id: int, request: Request):
             pass
     return {"ok": True}
 # ---------- End admin ----------
+SPEC_SCHEMA = {
+    "FDM": {"label": "FDM (filament 3D printing)", "fields": [
+        {"key": "material", "label": "Material", "type": "select", "required": True,
+         "options": ["PLA", "PETG", "ABS", "ASA", "TPU", "Nylon", "PA-CF", "PC", "Other"]},
+        {"key": "nozzle_mm", "label": "Nozzle diameter (mm)", "type": "select",
+         "options": ["0.2", "0.4", "0.6", "0.8"]},
+        {"key": "layer_height_mm", "label": "Layer height (mm)", "type": "number",
+         "min": 0.05, "max": 0.6, "step": 0.01, "hint": "0.12 to 0.28 mm is typical on a 0.4 mm nozzle"},
+        {"key": "walls", "label": "Wall count (perimeters)", "type": "number", "min": 1, "max": 20, "step": 1},
+        {"key": "infill_pct", "label": "Infill (%)", "type": "number", "min": 0, "max": 100, "step": 1},
+        {"key": "supports", "label": "Supports needed", "type": "select", "options": ["No", "Yes"]},
+        {"key": "orientation", "label": "Print orientation", "type": "text", "max": 200,
+         "hint": "e.g. flat on the bed, clip facing up"},
+        {"key": "nozzle_temp_c", "label": "Nozzle temperature (°C)", "type": "number", "min": 150, "max": 450, "step": 1},
+        {"key": "bed_temp_c", "label": "Bed temperature (°C)", "type": "number", "min": 0, "max": 150, "step": 1},
+    ]},
+    "SLS": {"label": "SLS (powder sintering)", "fields": [
+        {"key": "material", "label": "Material", "type": "select", "required": True,
+         "options": ["PA12", "PA11", "PA12 glass-filled", "PA12 carbon-filled", "TPU", "Other"]},
+        {"key": "layer_um", "label": "Layer thickness (µm)", "type": "number", "min": 50, "max": 300, "step": 10},
+        {"key": "min_wall_mm", "label": "Thinnest wall in the design (mm)", "type": "number",
+         "min": 0.3, "max": 10, "step": 0.1,
+         "hint": "About 0.7 mm is the usual minimum for PA12, about 2 mm for carbon-filled"},
+        {"key": "escape_holes", "label": "Powder escape holes", "type": "select",
+         "options": ["Not hollow", "Yes (3.5 mm or larger)", "No"]},
+        {"key": "finish", "label": "Finish", "type": "select",
+         "options": ["As printed", "Tumbled / bead blasted", "Dyed", "Vapor smoothed", "Painted"]},
+        {"key": "orientation", "label": "Orientation notes", "type": "text", "max": 200},
+    ]},
+    "SLA": {"label": "SLA (resin printing)", "fields": [
+        {"key": "material", "label": "Resin type", "type": "select", "required": True,
+         "options": ["Standard", "Tough", "Flexible", "High-temperature", "Castable", "Clear", "Other"]},
+        {"key": "layer_height_mm", "label": "Layer height (mm)", "type": "number",
+         "min": 0.025, "max": 0.2, "step": 0.005, "hint": "0.025 to 0.2 mm is the usual range"},
+        {"key": "angle_deg", "label": "Tilt angle from the plate (°)", "type": "number",
+         "min": 0, "max": 90, "step": 5, "hint": "30 to 45° is common"},
+        {"key": "supports", "label": "Supports needed", "type": "select", "options": ["No", "Yes"]},
+        {"key": "drain_holes", "label": "Drain holes", "type": "select",
+         "options": ["Not hollow", "Yes (4 mm or larger)", "No"]},
+        {"key": "wash_min", "label": "Wash time (minutes)", "type": "number", "min": 0, "max": 180, "step": 1},
+        {"key": "cure_min", "label": "UV post-cure time (minutes)", "type": "number", "min": 0, "max": 180, "step": 1},
+    ]},
+    "CNC": {"label": "CNC machining", "fields": [
+        {"key": "material", "label": "Material", "type": "select", "required": True,
+         "options": ["Aluminium 6061", "Aluminium 7075", "Brass", "Stainless steel", "Mild steel",
+                     "POM (Delrin)", "ABS", "Nylon", "Other"]},
+        {"key": "axes", "label": "Machine axes", "type": "select",
+         "options": ["3-axis", "3+2 / 4-axis", "5-axis"]},
+        {"key": "tolerance_mm", "label": "General tolerance (± mm)", "type": "number",
+         "min": 0.005, "max": 1, "step": 0.005, "hint": "±0.1 mm is typical for non-critical features"},
+        {"key": "finish_ra", "label": "Surface finish (Ra)", "type": "select",
+         "options": ["3.2 µm (standard)", "1.6 µm (fine)", "0.8 µm (very fine)"]},
+        {"key": "min_radius_mm", "label": "Smallest inside corner radius (mm)", "type": "number",
+         "min": 0.1, "max": 20, "step": 0.1, "hint": "Must be at least the radius of the cutting tool"},
+        {"key": "stock", "label": "Raw stock size", "type": "text", "max": 100, "hint": "e.g. 60 x 40 x 20 mm"},
+        {"key": "surface_treatment", "label": "Surface treatment", "type": "select",
+         "options": ["None", "Anodised", "Bead blasted", "Powder coated", "Polished", "Other"]},
+    ]},
+}
+
+PART_FILE_MATERIALS = {"PLA": "PLA", "PETG": "PETG", "ABS": "ABS", "ASA": "ASA", "TPU": "TPU", "PA-CF": "PA_CF"}
+
+
+def clean_specs(technique, raw):
+    schema = SPEC_SCHEMA.get(technique)
+    if not schema:
+        raise HTTPException(400, "Choose a manufacturing technique.")
+    out = {}
+    for fld in schema["fields"]:
+        val = raw.get(fld["key"])
+        val = "" if val is None else str(val).strip()
+        if val == "":
+            if fld.get("required"):
+                raise HTTPException(400, f"{fld['label']} is required.")
+            continue
+        if fld["type"] == "select":
+            if val not in fld["options"]:
+                raise HTTPException(400, f"Invalid value for {fld['label']}.")
+            out[fld["key"]] = val
+        elif fld["type"] == "number":
+            try:
+                n = float(val)
+            except ValueError:
+                raise HTTPException(400, f"{fld['label']} must be a number.")
+            if not (fld["min"] <= n <= fld["max"]):
+                raise HTTPException(400, f"{fld['label']} must be between {fld['min']} and {fld['max']}.")
+            out[fld["key"]] = int(n) if n == int(n) else n
+        else:
+            out[fld["key"]] = val[: fld.get("max", 200)]
+    return out
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await asgi.fetch(app, request.js_object, self.env)
