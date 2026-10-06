@@ -526,13 +526,13 @@ const thumb = (p, n) => p.img
        Shared UI fragments
        ===================================================== */
     function nav() {
-      const cartLink = `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`;
-      const adminLink = isAdmin ? '<a href="#/admin">Admin</a>' : '';
-      const userLink = me
-        ? `<a href="#/profile">${esc(me.name)}</a>`
-        : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`;
-      $('#nav').innerHTML = cartLink + adminLink + userLink;
-    }
+  $('#nav').innerHTML =
+    `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+    + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
+    + (me
+      ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
+      : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
+  }
 
     function tags(p) {
       return (p.k != 'buy' ? '<span class="tag">3D file</span>' : '')
@@ -759,14 +759,10 @@ const thumb = (p, n) => p.img
        Login gate, download, cart, checkout
        ===================================================== */
     function gate() {
-      if (!db) {
-        toast('Open this page while signed in to claude.ai.');
-        return false;
-      }
-      next = location.hash;
-      toast('Create your profile to continue.');
-      location.hash = '#/signup';
-      return false;
+  next = location.hash;
+  toast('Log in to continue.');
+  location.hash = '#/login';
+  return false;
     }
 
     async function dl(id) {
@@ -873,45 +869,51 @@ const thumb = (p, n) => p.img
        Account & profile
        ===================================================== */
     function authForm(mode) {
-      if (!db) {
-        return view(`
-          <div class="card auth">
-            <h1>Sign in to continue</h1>
-            <p class="mut">Open this page while signed in to claude.ai.</p>
-          </div>`);
-      }
+  const signup = mode === 'signup';
+  view(`
+    <form class="card auth" onsubmit="return auth(event,'${mode}')">
+      <h1>${signup ? 'Create your account' : 'Log in'}</h1>
+      ${signup ? `<label>Username<input name="username" required minlength="3" maxlength="50"></label>
+                  <label>Display name<input name="name" required minlength="2"></label>` : ''}
+      <label>Email<input name="email" type="email" required></label>
+      <label>Password<input name="password" type="password" required minlength="8"
+             autocomplete="${signup ? 'new-password' : 'current-password'}"></label>
+      <p id="err" class="err"></p>
+      <button>${signup ? 'Sign up' : 'Log in'}</button>
+      <p class="mut">${signup
+        ? 'Already registered? <a href="#/login">Log in</a>'
+        : 'No account yet? <a href="#/signup">Sign up</a>'}</p>
+    </form>`);
+}
 
-      view(`
-        <form class="card auth" onsubmit="return auth(event)">
-          <h1>${me ? 'Edit your username' : 'Create your profile'}</h1>
-          <p class="mut">Accounts use your claude.ai sign-in, so there is no separate password.</p>
-          <label>Username
-            <input name="name" required minlength="2" value="${esc(me?.name || '')}">
-          </label>
-          <button>Save and continue</button>
-        </form>`);
-    }
-
-    async function auth(e) {
+    async function auth(e, mode) {
       e.preventDefault();
-      const name = new FormData(e.target).get('name');
-
-      const defaults = {
-        bio: '', phone: '', pic: '', email: '',
-        role: 'consumer', reputation_score: 0,
-        created_at: new Date().toISOString()
-      };
-
-      me = { ...(me || defaults), id: uid, name };
-      await sync();
+      const body = Object.fromEntries(new FormData(e.target));
+      const r = await fetch('/api/' + mode, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        err(typeof d.detail === 'string' ? d.detail : 'Check your details and try again.');
+        return false;
+      }
+      me = d;
+      isAdmin = me.role === 'admin';
       nav();
-
       const target = next || '#/profile';
       next = '';
       location.hash = target;
       return false;
+  }
+    async function logout() {
+      await fetch('/api/logout', { method: 'POST' });
+      me = null;
+      isAdmin = false;
+      nav();
+      location.hash = '#/';
     }
-
     async function sync() {
       const { id, ...data } = me;
       try {
@@ -1230,6 +1232,11 @@ const thumb = (p, n) => p.img
     nav();
     view('<p class="mut">Loading catalog…</p>');
     try { await load(); } catch (e) { toast('Could not load the catalog.'); }
+    try {
+      const r = await fetch('/api/me');
+      if (r.ok) me = await r.json();
+      isAdmin = !!me && me.role === 'admin';
+    } catch (e) {}
     nav();
     route();
   }

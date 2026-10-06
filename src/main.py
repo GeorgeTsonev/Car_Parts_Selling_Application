@@ -1,7 +1,11 @@
 from workers import WorkerEntrypoint
 from fastapi import FastAPI, Request
 import asgi
-
+import base64, hashlib, hmac, secrets
+from js import crypto, TextEncoder, Uint8Array, Object
+from pyodide.ffi import to_js
+from fastapi import HTTPException, Response
+from pydantic import BaseModel
 app = FastAPI()
 
 
@@ -41,6 +45,121 @@ async def catalog(request: Request):
     except Exception:
         return PlainTextResponse(traceback.format_exc(), status_code=500)
 
+ITER = 100_000
+COOKIE = "rf_session"
+
+
+class SignupIn(BaseModel):
+    username: str
+    name: str
+    email: str
+    password: str
+
+
+class LoginIn(BaseModel):
+    email: str
+    password: str
+
+
+async def run(env, sql, *args):
+    return await env.DB.prepare(sql).bind(*args).run()
+
+
+async def pbkdf2(password, salt, iterations):
+    key = await crypto.subtle.importKey(
+        "raw", TextEncoder.new().encode(password), "PBKDF2", False, to_js(["deriveBits"])
+    )
+    params = to_js(
+        {"name": "PBKDF2", "hash": "SHA-256",
+         "salt": Uint8Array.new(to_js(list(salt))), "iterations": iterations},
+        dict_converter=Object.fromEntries,
+    )
+    bits = await crypto.subtle.deriveBits(params, key, 256)
+    return bytes(Uint8Array.new(bits).to_py())
+
+
+async def hash_password(pw):
+    salt = secrets.token_bytes(16)
+    h = await pbkdf2(pw, salt, ITER)
+    return f"pbkdf2${ITER}${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
+
+
+async def verify_password(pw, stored):
+    try:
+        _, it, s, h = stored.split("$")
+        calc = await pbkdf2(pw, base64.b64decode(s), int(it))
+        return hmac.compare_digest(calc, base64.b64decode(h))
+    except Exception:
+        return False
+
+
+def public_user(u):
+    return {
+        "id": u["user_id"], "username": u["username"], "name": u["name"],
+        "email": u["email"], "role": u["role"], "bio": u["bio"] or "",
+        "phone": u["contact_info"] or "", "pic": u["avatar_url"] or "",
+    }
+
+
+async def start_session(env, response, user_id):
+    token = secrets.token_urlsafe(32)
+    th = hashlib.sha256(token.encode()).hexdigest()
+    await run(env, "INSERT INTO Sessions(token_hash, user_id, expires_at) "
+                   "VALUES(?, ?, datetime('now','+30 days'))", th, user_id)
+    response.set_cookie(COOKIE, token, max_age=30 * 86400, httponly=True,
+                        secure=True, samesite="lax", path="/")
+
+
+async def current_user(request, env):
+    token = request.cookies.get(COOKIE)
+    if not token:
+        return None
+    th = hashlib.sha256(token.encode()).hexdigest()
+    rows = await q(env, "SELECT u.* FROM Sessions s JOIN Users u ON u.user_id = s.user_id "
+                        "WHERE s.token_hash = ? AND s.expires_at > datetime('now')", th)
+    return rows[0] if rows else None
+
+
+@app.post("/api/signup")
+async def signup(data: SignupIn, request: Request, response: Response):
+    env = request.scope["env"]
+    username, name, email = data.username.strip(), data.name.strip(), data.email.strip().lower()
+    if len(username) < 3 or len(name) < 2 or "@" not in email or len(data.password) < 8:
+        raise HTTPException(400, "Check your details. Password needs at least 8 characters.")
+    if await q(env, "SELECT user_id FROM Users WHERE email = ? OR username = ?", email, username):
+        raise HTTPException(409, "That email or username is already registered.")
+    await run(env, "INSERT INTO Users(username, name, email, password_hash) VALUES(?, ?, ?, ?)",
+              username, name, email, await hash_password(data.password))
+    user = (await q(env, "SELECT * FROM Users WHERE email = ?", email))[0]
+    await start_session(env, response, user["user_id"])
+    return public_user(user)
+
+
+@app.post("/api/login")
+async def login(data: LoginIn, request: Request, response: Response):
+    env = request.scope["env"]
+    rows = await q(env, "SELECT * FROM Users WHERE email = ?", data.email.strip().lower())
+    if not rows or not await verify_password(data.password, rows[0]["password_hash"]):
+        raise HTTPException(401, "Invalid email or password.")
+    await start_session(env, response, rows[0]["user_id"])
+    return public_user(rows[0])
+
+
+@app.post("/api/logout")
+async def logout(request: Request, response: Response):
+    env = request.scope["env"]
+    token = request.cookies.get(COOKIE)
+    if token:
+        await run(env, "DELETE FROM Sessions WHERE token_hash = ?",
+                  hashlib.sha256(token.encode()).hexdigest())
+    response.delete_cookie(COOKIE, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/me")
+async def me_route(request: Request):
+    u = await current_user(request, request.scope["env"])
+    return public_user(u) if u else None
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):

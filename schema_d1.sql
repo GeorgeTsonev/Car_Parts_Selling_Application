@@ -137,3 +137,8 @@ CREATE TABLE Part_Reviews (
   comment TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE Sessions (
+    token_hash TEXT PRIMARY KEY, 
+    user_id INTEGER NOT NULL REFERENCES Users(user_id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL, 
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP);
