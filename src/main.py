@@ -414,7 +414,122 @@ async def public_files(env):
         r["url"] = public_url(env, r.pop("r2_object_key"))
     return rows
 
+# ---------- Admin ----------
+class BrandIn(BaseModel):
+    name: str
+    logo_url: str = ""
 
+
+class ModelIn(BaseModel):
+    brand_id: int
+    name: str
+    picture_url: str = ""
+
+
+class GenIn(BaseModel):
+    model_id: int
+    generation_name: str = ""
+    start_year: int
+    end_year: int = 0
+    overview_image_url: str = ""
+
+
+class StatusIn(BaseModel):
+    status: str
+
+
+class PartEditIn(BaseModel):
+    price: float = 0
+    image_url: str = ""
+    oem: str = ""
+    physical: bool = False
+
+
+async def require_admin(request):
+    u = await require_user(request)
+    if u["role"] != "admin":
+        raise HTTPException(403, "Admins only.")
+    return u
+
+
+async def admin_write(env, sql, *args):
+    try:
+        await run(env, sql, *args)
+    except Exception:
+        raise HTTPException(409, "Could not save. Check for duplicates or invalid references.")
+    return {"ok": True}
+
+
+@app.post("/api/admin/brands")
+async def admin_add_brand(data: BrandIn, request: Request):
+    await require_admin(request)
+    if not data.name.strip():
+        raise HTTPException(400, "Enter a brand name.")
+    return await admin_write(request.scope["env"],
+        "INSERT INTO Brands(name, logo_url) VALUES(?, NULLIF(?, ''))",
+        data.name.strip(), data.logo_url.strip())
+
+
+@app.post("/api/admin/models")
+async def admin_add_model(data: ModelIn, request: Request):
+    await require_admin(request)
+    if not data.name.strip():
+        raise HTTPException(400, "Enter a model name.")
+    return await admin_write(request.scope["env"],
+        "INSERT INTO Models(brand_id, name, picture_url) VALUES(?, ?, NULLIF(?, ''))",
+        data.brand_id, data.name.strip(), data.picture_url.strip())
+
+
+@app.post("/api/admin/generations")
+async def admin_add_generation(data: GenIn, request: Request):
+    await require_admin(request)
+    if not (1900 <= data.start_year <= 2100):
+        raise HTTPException(400, "Enter a valid start year.")
+    return await admin_write(request.scope["env"],
+        "INSERT INTO Vehicle_Generations(model_id, generation_name, start_year, end_year, overview_image_url) "
+        "VALUES(?, ?, ?, NULLIF(?, 0), NULLIF(?, ''))",
+        data.model_id, data.generation_name.strip(), data.start_year,
+        data.end_year, data.overview_image_url.strip())
+
+
+@app.put("/api/admin/parts/{part_id}/status")
+async def admin_part_status(part_id: int, data: StatusIn, request: Request):
+    await require_admin(request)
+    if data.status not in ("draft", "community_tested", "verified_fit", "flagged"):
+        raise HTTPException(400, "Invalid status.")
+    return await admin_write(request.scope["env"],
+        "UPDATE Parts SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE part_id = ?",
+        data.status, part_id)
+
+
+@app.put("/api/admin/parts/{part_id}")
+async def admin_edit_part(part_id: int, data: PartEditIn, request: Request):
+    await require_admin(request)
+    price = data.price if data.physical and data.price > 0 else 0
+    return await admin_write(request.scope["env"],
+        "UPDATE Parts SET is_available_physical = ?, physical_print_price = NULLIF(?, 0), "
+        "image_url = NULLIF(?, ''), oem_part_number = NULLIF(?, ''), updated_at = CURRENT_TIMESTAMP "
+        "WHERE part_id = ?",
+        1 if (data.physical and price > 0) else 0, price,
+        data.image_url.strip(), data.oem.strip(), part_id)
+
+
+@app.delete("/api/admin/parts/{part_id}")
+async def admin_delete_part(part_id: int, request: Request):
+    env = request.scope["env"]
+    await require_admin(request)
+    files = await q(env, "SELECT r2_object_key FROM Part_Files WHERE part_id = ?", part_id)
+    try:
+        await run(env, "DELETE FROM Parts WHERE part_id = ?", part_id)
+    except Exception:
+        raise HTTPException(409, "This part is in an order and can't be deleted. Set its status to Flagged instead.")
+    for f in files:
+        try:
+            await env.BUCKET.delete(f["r2_object_key"])
+        except Exception:
+            pass
+    return {"ok": True}
+# ---------- End admin ----------
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
         return await asgi.fetch(app, request.js_object, self.env)
