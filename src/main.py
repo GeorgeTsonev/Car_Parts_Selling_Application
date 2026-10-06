@@ -312,6 +312,7 @@ async def upload(kind: str, filename: str, request: Request):
     user = await require_user(request)
     uid = user["user_id"]
 
+
     if kind not in LIMITS:
         raise HTTPException(404, "Unknown upload type.")
 
