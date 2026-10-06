@@ -1019,59 +1019,39 @@ const thumb = (p, n) => p.img
     };
 
     const addB = e => {
-      e.preventDefault();
-      writeDoc('brands', Date.now(), { name: new FormData(e.target).get('n') });
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('POST', '/api/admin/brands', { name: f.get('n'), logo_url: f.get('logo') || '' }), 'Brand added.');
       return false;
     };
 
     const addM = e => {
-      e.preventDefault();
-      const f = new FormData(e.target);
-      writeDoc('models', Date.now(), { brand_id: f.get('b'), name: f.get('n') });
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('POST', '/api/admin/models', { brand_id: +f.get('b'), name: f.get('n'), picture_url: f.get('pic') || '' }), 'Model added.');
       return false;
     };
 
     const addG = e => {
-      e.preventDefault();
-      const f = new FormData(e.target);
-      const data = {
-        model_id: f.get('m'),
-        generation_name: f.get('n'),
-        start_year: +f.get('s')
-      };
-      if (f.get('e')) data.end_year = +f.get('e');
-      writeDoc('generations', Date.now(), data);
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('POST', '/api/admin/generations', {
+        model_id: +f.get('m'), generation_name: f.get('n') || '', start_year: +f.get('s'),
+        end_year: +(f.get('e') || 0), overview_image_url: f.get('img') || ''
+      }), 'Generation added.');
       return false;
     };
+    const editP = (e, id) => {
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('PUT', '/api/admin/parts/' + id, {
+        price: +(f.get('price') || 0), image_url: f.get('img') || '',
+        oem: f.get('oem') || '', physical: f.get('phys') === 'on'
+      }), 'Details saved.');
+      return false;
+    };
+    const setSt = (id, s) => adminDo(() => api('PUT', `/api/admin/parts/${id}/status`, { status: s }), 'Status updated.');
 
-    async function setSt(id, status) {
-      try {
-        await db.collection('parts').doc(id).update({ status });
-        await load();
-        toast('Status updated.');
-      } catch (e) {
-        toast('Could not update.');
-      }
-    }
-
-    async function delP(id) {
+    const delP = id => {
       if (!confirm('Delete this part and its files?')) return;
-
-      try {
-        for (const c of ['compat', 'part_files']) {
-          for (const doc of (await db.collection(c).get()).docs) {
-            if (doc.data().part_id == id) await db.collection(c).doc(doc.id).delete();
-          }
-        }
-        await db.collection('parts').doc(id).delete();
-        await load();
-        toast('Part deleted.');
-      } catch (e) {
-        toast('Could not delete.');
-      }
-
-      admin();
-    }
+      adminDo(() => api('DELETE', '/api/admin/parts/' + id), 'Part deleted.');
+    };
 
     async function imp(input) {
       try {
@@ -1093,7 +1073,10 @@ const thumb = (p, n) => p.img
 
       admin();
     }
-
+    async function adminDo(fn, okMsg) {
+      try { await fn(); await load(); toast(okMsg); } catch (e) { toast(e.message); }
+      admin();
+    }
     function admin() {
       if (!isAdmin) return home();
 
@@ -1145,7 +1128,7 @@ const thumb = (p, n) => p.img
         <h2>Parts</h2>
         ${partRows || '<p class="mut">No parts yet.</p>'}`);
     }
-
+    
     /* =====================================================
        Routing & startup
        ===================================================== */
