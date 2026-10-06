@@ -17,23 +17,28 @@ async def q(env, sql, *args):
 async def health():
     return {"ok": True}
 
+import traceback
+from fastapi.responses import PlainTextResponse
 
 @app.get("/api/catalog")
 async def catalog(request: Request):
-    env = request.scope["env"]
-    return {
-        "brands": await q(env, "SELECT brand_id, name, logo_url FROM Brands ORDER BY name"),
-        "models": await q(env, "SELECT model_id, brand_id, name, description, picture_url FROM Models"),
-        "generations": await q(env, "SELECT generation_id, model_id, generation_name, start_year, end_year, overview_image_url FROM Vehicle_Generations"),
-        "parts": await q(env, """
-            SELECT p.part_id, p.name, p.description, p.oem_part_number, p.category,
-                   p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
-                   p.is_available_physical, p.physical_print_price, p.status,
-                   p.author_user_id, u.username AS author
-            FROM Parts p JOIN Users u ON u.user_id = p.author_user_id"""),
-        "compat": await q(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities"),
-        "files": await q(env, "SELECT file_id, part_id, file_type, file_name, recommended_material, recommended_infill_pct, supports_required FROM Part_Files"),
-    }
+    try:
+        env = request.scope["env"]
+        return {
+            "brands": await q(env, "SELECT brand_id, name, logo_url FROM Brands ORDER BY name"),
+            "models": await q(env, "SELECT model_id, brand_id, name, description, picture_url FROM Models"),
+            "generations": await q(env, "SELECT generation_id, model_id, generation_name, start_year, end_year, overview_image_url FROM Vehicle_Generations"),
+            "parts": await q(env, """
+                SELECT p.part_id, p.name, p.description, p.oem_part_number, p.category,
+                       p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
+                       p.is_available_physical, p.physical_print_price, p.status,
+                       p.author_user_id, u.username AS author
+                FROM Parts p JOIN Users u ON u.user_id = p.author_user_id"""),
+            "compat": await q(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities"),
+            "files": await q(env, "SELECT file_id, part_id, file_type, file_name, recommended_material, recommended_infill_pct, supports_required FROM Part_Files"),
+        }
+    except Exception:
+        return PlainTextResponse(traceback.format_exc(), status_code=500)
 
 
 class Default(WorkerEntrypoint):
