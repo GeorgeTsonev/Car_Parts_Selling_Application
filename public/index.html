@@ -380,6 +380,17 @@
       .pr { grid-column: 2; text-align: left; }
       .th { width: 48px; height: 48px; }
     }
+    .aform {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      align-items: end;
+      padding: 14px 0;
+      border-top: 1px solid var(--line);
+    }
+    .aform:first-of-type { border-top: 0; padding-top: 0; }
+    .aform h3 { grid-column: 1 / -1; margin: 0; font-size: 17px; }
+    .aform button { height: 42px; }
   </style>
 </head>
 
@@ -433,7 +444,12 @@
     async function api(method, url, body) {
       const r = await fetch(url, { method, headers: J, body: body ? JSON.stringify(body) : undefined });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(typeof d.detail === 'string' ? d.detail : 'Request failed.');
+      if (!r.ok) {
+        const msg = Array.isArray(d.detail)
+          ? d.detail.map(x => (x.loc || []).slice(-1) + ': ' + x.msg).join('; ')
+          : d.detail;
+        throw new Error(typeof msg === 'string' && msg ? msg : 'Request failed.');
+      }
       return d;
     }
     async function uploadRaw(kind, file) {
@@ -1081,7 +1097,8 @@ const thumb = (p, n) => p.img
       if (!isAdmin) return home();
 
       const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
-      const modelOpts = M.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('');
+      const modelOpts = M.map(m =>
+            `<option value="${m.model_id}">${esc((B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name)}</option>`).join('');
 
       const partRows = P.map(p => `
         <div class="row" style="grid-template-columns:1fr auto auto">
@@ -1097,30 +1114,30 @@ const thumb = (p, n) => p.img
         <h1>Admin</h1>
 
         <div class="card">
-          <h2>Import a catalog</h2>
-          <p class="mut">Load a JSON file with the collections ${COL.join(', ')}. Records with the same id are replaced.</p>
-          <input type="file" accept=".json" onchange="imp(this)">
-        </div>
-
-        <div class="card">
           <h2>Add a brand, model or generation</h2>
 
-          <form class="sf" onsubmit="return addB(event)">
-            <input name="n" placeholder="Brand name" required>
+          <form class="aform" onsubmit="return addB(event)">
+            <h3>New brand</h3>
+            <label>Brand name<input name="n" placeholder="e.g. Volkswagen" required></label>
+            <label>Logo URL (optional)<input name="logo" placeholder="https://..."></label>
             <button>Add brand</button>
           </form>
 
-          <form class="sf" onsubmit="return addM(event)">
-            <select name="b">${brandOpts}</select>
-            <input name="n" placeholder="Model name" required>
+          <form class="aform" onsubmit="return addM(event)">
+            <h3>New model</h3>
+            <label>Brand<select name="b">${brandOpts}</select></label>
+            <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
+            <label>Picture URL (optional)<input name="pic" placeholder="https://..."></label>
             <button>Add model</button>
           </form>
 
-          <form class="sf" onsubmit="return addG(event)">
-            <select name="m">${modelOpts}</select>
-            <input name="n" placeholder="Generation, e.g. Mk4">
-            <input name="s" type="number" placeholder="Start year" required>
-            <input name="e" type="number" placeholder="End year">
+          <form class="aform" onsubmit="return addG(event)">
+            <h3>New generation</h3>
+            <label>Model<select name="m">${modelOpts}</select></label>
+            <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
+            <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
+            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
+            <label>Overview image URL (optional)<input name="img" placeholder="https://..."></label>
             <button>Add generation</button>
           </form>
         </div>
