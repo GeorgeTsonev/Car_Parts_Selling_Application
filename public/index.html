@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ReFit – parts for cars the manufacturer forgot</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap">
-  .th img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
   <style>
     /* ---------- Theme variables ---------- */
     :root {
@@ -227,23 +226,17 @@
       font-size: 15px;
     }
 
-    .th {
-      width: 64px;
-      height: 64px;
-      border-radius: 8px;
-      background: var(--bg);
-      display: grid;
-      place-items: center;
-      font-size: 26px;
-      font-weight: 800;
-    }
+    .th { position: relative; overflow: hidden; }
+    .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
     .th.big {
-      width: 140px;
-      height: 140px;
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1 / 1;
+      max-width: 360px;
       font-size: 60px;
     }
-
+    .th.big img { object-fit: contain; background: var(--bg); }
     .pr { font-weight: 800; text-align: right; }
 
     .tag {
@@ -299,12 +292,7 @@
     }
 
     /* ---------- Part detail ---------- */
-    .pd {
-      display: grid;
-      grid-template-columns: 140px 1fr;
-      gap: 20px;
-      margin: 16px 0;
-    }
+    .pd { grid-template-columns: minmax(200px, 360px) 1fr; }
 
     .act {
       display: flex;
@@ -388,6 +376,13 @@
       padding: 14px 0;
       border-top: 1px solid var(--line);
     }
+    .nb {
+      position: absolute; left: 3px; top: 3px;
+      min-width: 18px; padding: 0 4px;
+      background: var(--mk); color: #fff;
+      font: 800 12px/18px Barlow, sans-serif; text-align: center;
+      border-radius: 9px;
+    }
     .aform:first-of-type { border-top: 0; padding-top: 0; }
     .aform h3 { grid-column: 1 / -1; margin: 0; font-size: 17px; }
     .aform button { height: 42px; }
@@ -411,6 +406,7 @@
       background: var(--bg); display: grid; place-items: center; font-size: 32px;
     }
     .carcard span { padding: 8px 10px; font-weight: 600; }
+
   </style>
 </head>
 
@@ -583,7 +579,7 @@ async function load() {
   });
 }
 const thumb = (p, n) => p.img
-  ? `<img src="${esc(p.img)}" alt="" loading="lazy">`
+  ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy">${n ? `<b class="nb">${n}</b>` : ''}`
   : (n || CAT[p.cat]);
     /* =====================================================
        Shared UI fragments
@@ -652,11 +648,10 @@ const thumb = (p, n) => p.img
                 <option value="">Choose a brand</option>${brandOptions}
               </select>
             </label>
-            <label>Model<select id="sm"></select></label>
+            <label>Model<select id="sm" onchange="showPrev()"></select></label>
+            <div id="prev" class="prev"></div>
             <button onclick="goCar()">Show parts</button>
           </div>
-          <label>Model<select id="sm" onchange="showPrev()"></select></label>
-          <div id="prev" class="prev"></div>
           ${emptyNote}
           ${sform()}
         </section>`);
