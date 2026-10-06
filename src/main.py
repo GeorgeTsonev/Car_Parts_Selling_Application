@@ -54,7 +54,7 @@ async def catalog(request: Request):
             "models": await q(env, "SELECT model_id, brand_id, name, description, picture_url FROM Models"),
             "generations": await q(env, "SELECT generation_id, model_id, generation_name, start_year, end_year, overview_image_url FROM Vehicle_Generations"),
             "parts": await q(env, """
-                SELECT p.part_id, p.name, p.description, p.oem_part_number, p.category,
+                SELECT p.part_id, p.created_at, p.name, p.description, p.oem_part_number, p.category,
                        p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
                        p.is_available_physical, p.physical_print_price, p.status,
                        p.author_user_id, u.username AS author

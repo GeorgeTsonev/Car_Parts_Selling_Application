@@ -406,7 +406,12 @@
       background: var(--bg); display: grid; place-items: center; font-size: 32px;
     }
     .carcard span { padding: 8px 10px; font-weight: 600; }
-
+    .filters {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 12px;
+      align-items: end;
+    }
   </style>
 </head>
 
@@ -547,6 +552,7 @@ async function load() {
     m: modelById[g.model_id]?.name || '',
     g: g.generation_name || '',
     y: g.start_year + '–' + (g.end_year || ''),
+    mid: g.model_id,
     img: g.overview_image_url || modelById[g.model_id]?.picture_url || ''
   }));
 
@@ -574,6 +580,7 @@ async function load() {
       asm: !!x.is_assembly,
       file: file,
       owner: x.author_user_id,
+      added: x.created_at || '',
       img: x.image_url || ''
     };
   });
@@ -1120,11 +1127,184 @@ const thumb = (p, n) => p.img
 
       admin();
     }
+    let AF = { name: '', oem: '', brand: '', model: '', status: '', type: '', cat: '', min: '', max: '', sort: 'new' };
+
+    const SORTS = {
+      new: (a, b) => (b.added || '').localeCompare(a.added || '') || b.id - a.id,
+      old: (a, b) => (a.added || '').localeCompare(b.added || '') || a.id - b.id,
+      pl:  (a, b) => a.price - b.price,
+      ph:  (a, b) => b.price - a.price,
+      az:  (a, b) => a.name.localeCompare(b.name)
+    };
+
+    function partMatches(p) {
+      const f = AF;
+      if (f.name && !p.name.toLowerCase().includes(f.name.toLowerCase())) return false;
+      if (f.oem && !p.oem.toLowerCase().includes(f.oem.toLowerCase())) return false;
+      if (f.status && p.st !== f.status) return false;
+      if (f.cat && p.cat !== f.cat) return false;
+      if (f.type === 'sold' && p.k === 'print') return false;
+      if (f.type === 'schematic' && p.k !== 'print') return false;
+      if ((f.min !== '' || f.max !== '') && p.price <= 0) return false;
+      if (f.min !== '' && p.price < +f.min) return false;
+      if (f.max !== '' && p.price > +f.max) return false;
+      const gens = p.g.map(id => G.find(x => x.id == id)).filter(Boolean);
+      if (f.brand && !gens.some(g => g.b == f.brand)) return false;
+      if (f.model && !gens.some(g => g.mid == f.model)) return false;
+      return true;
+    }
+
+    function modelFilterOpts() {
+      return '<option value="">Any model</option>' + M
+        .filter(m => !AF.brand || m.brand_id == AF.brand)
+        .map(m => {
+          const brand = B.find(b => b.id == m.brand_id)?.n || '';
+          return `<option value="${m.model_id}"${m.model_id == AF.model ? ' selected' : ''}>${esc(brand + ' ' + m.name)}</option>`;
+        }).join('');
+    }
+
+    function partCard(p) {
+      const cars = p.g.map(gname).filter(Boolean).join(', ') || 'No car assigned';
+      const kind = p.k === 'print' ? 'Schematic only' : `Sold as printed, ${money(p.price)}`;
+      return `
+        <div class="card">
+          <div><b>${esc(p.name)}</b> <span class="mut">by ${esc(p.au)}</span></div>
+          <div class="mut">${esc((p.cat || '').replace('_', ' '))} · ${kind} · OEM ${esc(p.oem || '—')} · Added ${esc((p.added || '').slice(0, 10) || '—')}</div>
+          <div class="mut">${esc(cars)}</div>
+          <div class="sf">
+            <select onchange="setSt(${p.id}, this.value)" aria-label="Status">
+              ${Object.keys(ST).map(s => `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
+            </select>
+            <button class="ghost" onclick="delP(${p.id})">Delete</button>
+          </div>
+          <form class="aform" onsubmit="return editP(event, ${p.id})">
+            <label>Printed price (€)<input name="price" type="number" step="0.01" min="0" placeholder="e.g. 4.50" value="${p.price || ''}"></label>
+            <label>Picture URL<input name="img" placeholder="https://..." value="${esc(p.img)}"></label>
+            <label>OEM number<input name="oem" placeholder="optional" value="${esc(p.oem)}"></label>
+            <label><span>Sold as printed part</span><input name="phys" type="checkbox" style="width:auto"${p.k != 'print' ? ' checked' : ''}></label>
+            <button>Save details</button>
+          </form>
+        </div>`;
+    }
+
+    function renderParts() {
+      const list = P.filter(partMatches).sort(SORTS[AF.sort] || SORTS.new);
+      $('#pcount').textContent = `${list.length} of ${P.length} parts`;
+      $('#plist').innerHTML = list.map(partCard).join('')
+        || '<p class="mut">No parts match these filters.</p>';
+    }
+
+    function adminFilter(e) {
+      const f = $('#af');
+      for (const k of Object.keys(AF)) AF[k] = f.elements[k].value;
+      if (e && e.target.name === 'brand') {
+        AF.model = '';
+        $('#af-model').innerHTML = modelFilterOpts();
+      }
+      renderParts();
+    }
+
+    function adminResetFilters() {
+      AF = { name: '', oem: '', brand: '', model: '', status: '', type: '', cat: '', min: '', max: '', sort: 'new' };
+      admin();
+    }
+
+    function admin() {
+      if (!isAdmin) return home();
+
+      const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
+      const modelOpts = M.map(m =>
+        `<option value="${m.model_id}">${esc((B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name)}</option>`).join('');
+      const brandFilter = '<option value="">Any brand</option>'
+        + B.map(b => `<option value="${b.id}"${b.id == AF.brand ? ' selected' : ''}>${esc(b.n)}</option>`).join('');
+      const sel = (key, val) => (AF[key] === val ? ' selected' : '');
+
+      view(`
+        <h1>Admin</h1>
+
+        <div class="card">
+          <h2>Add a brand, model or generation</h2>
+
+          <form class="aform" onsubmit="return addB(event)">
+            <h3>New brand</h3>
+            <label>Brand name<input name="n" placeholder="e.g. Volkswagen" required></label>
+            <label>Logo URL (optional)<input name="logo" placeholder="https://..."></label>
+            <button>Add brand</button>
+          </form>
+
+          <form class="aform" onsubmit="return addM(event)">
+            <h3>New model</h3>
+            <label>Brand<select name="b">${brandOpts}</select></label>
+            <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
+            <label>Model picture (optional)
+              <input name="pic" data-url placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
+            <button>Add model</button>
+          </form>
+
+          <form class="aform" onsubmit="return addG(event)">
+            <h3>New generation</h3>
+            <label>Model<select name="m">${modelOpts}</select></label>
+            <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
+            <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
+            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
+            <label>Generation photo (optional)
+              <input name="img" data-url placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
+            <button>Add generation</button>
+          </form>
+        </div>
+
+        <h2>Find parts</h2>
+        <form id="af" class="card filters" oninput="adminFilter(event)" onsubmit="return false">
+          <label>Name<input name="name" value="${esc(AF.name)}" placeholder="part name"></label>
+          <label>OEM number<input name="oem" value="${esc(AF.oem)}" placeholder="OEM number"></label>
+          <label>Brand<select name="brand">${brandFilter}</select></label>
+          <label>Model<select name="model" id="af-model">${modelFilterOpts()}</select></label>
+          <label>Status
+            <select name="status">
+              <option value="">Any status</option>
+              ${Object.keys(ST).map(s => `<option value="${s}"${sel('status', s)}>${ST[s]}</option>`).join('')}
+            </select>
+          </label>
+          <label>Type
+            <select name="type">
+              <option value="">Sold parts and schematics</option>
+              <option value="sold"${sel('type', 'sold')}>Sold as printed part</option>
+              <option value="schematic"${sel('type', 'schematic')}>Schematic only</option>
+            </select>
+          </label>
+          <label>Category
+            <select name="cat">
+              <option value="">Any category</option>
+              ${Object.keys(CAT).map(c => `<option value="${c}"${sel('cat', c)}>${c.replace('_', ' ')}</option>`).join('')}
+            </select>
+          </label>
+          <label>Min price (€)<input name="min" type="number" min="0" step="0.01" value="${esc(AF.min)}"></label>
+          <label>Max price (€)<input name="max" type="number" min="0" step="0.01" value="${esc(AF.max)}"></label>
+          <label>Sort by
+            <select name="sort">
+              <option value="new"${sel('sort', 'new')}>Added: newest first</option>
+              <option value="old"${sel('sort', 'old')}>Added: oldest first</option>
+              <option value="pl"${sel('sort', 'pl')}>Price: low to high</option>
+              <option value="ph"${sel('sort', 'ph')}>Price: high to low</option>
+              <option value="az"${sel('sort', 'az')}>Name: A to Z</option>
+            </select>
+          </label>
+          <button type="button" class="ghost" onclick="adminResetFilters()">Reset filters</button>
+        </form>
+
+        <p id="pcount" class="mut"></p>
+        <div id="plist"></div>`);
+      renderParts();
+    }
     async function adminDo(fn, okMsg) {
       try { await fn(); await load(); toast(okMsg); } catch (e) { toast(e.message); }
       admin();
     }
-    function admin() {
+    /*function admin() { THIS IS THE OLD ADMIN FUNCTION, KEPT IN CASE SOMETHING GOES WRONG
       if (!isAdmin) return home();
 
       const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
@@ -1197,7 +1377,7 @@ const thumb = (p, n) => p.img
 
         <h2>Parts</h2>
         ${partCards || '<p class="mut">No parts yet.</p>'}`);
-    }
+    }*/
     
     async function adminPic(inp) {
       const f = inp.files[0];
