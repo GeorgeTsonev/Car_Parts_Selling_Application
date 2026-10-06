@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ReFit – parts for cars the manufacturer forgot</title>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap">
-
+  .th img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; }
   <style>
     /* ---------- Theme variables ---------- */
     :root {
@@ -472,53 +472,56 @@
     const readCollection = async name =>
       (await db.collection(name).get()).docs.map(d => ({ id: d.id, ...d.data() }));
 
-    async function load() {
-      const [brands, models, generations, parts, compat, partFiles, users] =
-        await Promise.all(COL.map(readCollection));
+async function load() {
+  const d = await (await fetch('/api/catalog')).json();
 
-      M = models;
-      U = Object.fromEntries(users.map(u => [u.id, u]));
-      B = brands
-        .map(b => ({ id: b.id, n: b.name }))
-        .sort((a, b) => a.n.localeCompare(b.n));
+  M = d.models;
+  B = d.brands
+    .map(b => ({ id: b.brand_id, n: b.name }))
+    .sort((a, b) => a.n.localeCompare(b.n));
 
-      const modelById = Object.fromEntries(models.map(m => [m.id, m]));
+  const modelById = Object.fromEntries(d.models.map(m => [m.model_id, m]));
 
-      G = generations.map(g => ({
-        id: g.id,
-        b: modelById[g.model_id]?.brand_id,
-        m: modelById[g.model_id]?.name || '',
-        g: g.generation_name || '',
-        y: g.start_year + '–' + (g.end_year || '')
-      }));
+  G = d.generations.map(g => ({
+    id: g.generation_id,
+    b: modelById[g.model_id]?.brand_id,
+    m: modelById[g.model_id]?.name || '',
+    g: g.generation_name || '',
+    y: g.start_year + '–' + (g.end_year || ''),
+    img: g.overview_image_url
+  }));
 
-      // k: 'buy' = physical only, 'print' = 3D file only, 'both' = either
-      P = parts.map(x => {
-        const file = partFiles.find(f => f.part_id == x.id);
-        return {
-          id: x.id,
-          name: x.name,
-          cat: x.category,
-          oem: x.oem_part_number || '',
-          g: compat.filter(c => c.part_id == x.id).map(c => c.generation_id),
-          pos: [x.hotspot_x || 300, x.hotspot_y || 150],
-          k: x.is_available_physical ? (file ? 'both' : 'buy') : 'print',
-          mat: file?.recommended_material || x.print_material || 'PETG',
-          inf: file?.recommended_infill_pct || 0,
-          sup: file?.supports_required ? 1 : 0,
-          price: x.physical_print_price || 0,
-          st: x.status || 'draft',
-          au: U[x.author_user_id]?.name || 'Unknown',
-          lic: x.license,
-          d: x.description || '',
-          steps: x.removal_steps || [],
-          asm: !!x.is_assembly,
-          file: file,
-          owner: x.author_user_id
-        };
-      });
-    }
-
+  P = d.parts.map(x => {
+    const file = d.files.find(f => f.part_id == x.part_id);
+    const comp = d.compat.filter(c => c.part_id == x.part_id);
+    return {
+      id: x.part_id,
+      name: x.name,
+      cat: x.category,
+      oem: x.oem_part_number || '',
+      g: comp.map(c => c.generation_id),
+      hot: Object.fromEntries(comp.map(c => [c.generation_id, [c.hotspot_x ?? 50, c.hotspot_y ?? 50]])),
+      pos: [300, 150],
+      k: x.is_available_physical ? (file ? 'both' : 'buy') : 'print',
+      mat: file?.recommended_material || 'PETG',
+      inf: file?.recommended_infill_pct || 0,
+      sup: file?.supports_required ? 1 : 0,
+      price: x.physical_print_price || 0,
+      st: x.status || 'draft',
+      au: x.author || 'Unknown',
+      lic: x.license,
+      d: x.description || '',
+      steps: (x.disassembly_instructions || '').split('\n').filter(Boolean),
+      asm: !!x.is_assembly,
+      file: file,
+      owner: x.author_user_id,
+      img: x.image_url || ''
+    };
+  });
+}
+const thumb = (p, n) => p.img
+  ? `<img src="${esc(p.img)}" alt="" loading="lazy">`
+  : (n || CAT[p.cat]);
     /* =====================================================
        Shared UI fragments
        ===================================================== */
@@ -545,7 +548,7 @@
 
       return `
         <a class="row" href="#/part/${p.id}">
-          <div class="th">${badge || CAT[p.cat]}</div>
+          <div class="th">${thumb(p,n)}</div>
           <div>
             <h3>${esc(p.name)}</h3>
             <p>${esc(p.d)}</p>
@@ -646,7 +649,7 @@
       const parts = all().filter(p => p.g.includes(gen.id));
 
       const hotspots = parts.map((p, i) => {
-        const [x, y] = p.pos;
+        const [px, py] = p.hot[gen.id]; const x = px * 6, y = py * 2.6;
         return `
           <a href="#/part/${p.id}">
             <g class="hs">
@@ -719,7 +722,7 @@
         <a href="javascript:history.back()">← Back</a>
 
         <div class="pd">
-          <div class="th big">${CAT[p.cat]}</div>
+          <div class="th big">${thumb(p)}</div>
           <div>
             <h1>${esc(p.name)}</h1>
             <p>${esc(p.d)}</p>
@@ -1222,43 +1225,14 @@
       (routes[page] || home)();
     }
 
-    async function init() {
-      addEventListener('hashchange', route);
-      nav();
-      view('<p class="mut">Loading catalog…</p>');
-
-      const use = name => (window.claude ? window.claude.use(name) : null);
-
-      try {
-        usr = await use('user');
-        db = await use('db');
-        assets = await use('assets');
-        dlc = await use('downloads');
-      } catch (e) {}
-
-      if (!db) {
-        view(`
-          <div class="card auth">
-            <h1>Sign in to continue</h1>
-            <p class="mut">Open this page while signed in to claude.ai to load the parts catalog.</p>
-          </div>`);
-        return;
-      }
-
-      try {
-        uid = usr ? String(await usr.id()) : '';
-        isAdmin = !!(usr && usr.canEdit());
-        await load();
-
-        const doc = await db.collection('users').doc(uid).get();
-        if (doc.exists) me = { id: uid, ...doc.data() };
-      } catch (e) {
-        toast('Could not load the catalog.');
-      }
-
-      nav();
-      route();
-    }
+  async function init() {
+    addEventListener('hashchange', route);
+    nav();
+    view('<p class="mut">Loading catalog…</p>');
+    try { await load(); } catch (e) { toast('Could not load the catalog.'); }
+    nav();
+    route();
+  }
 
     init();
   </script>

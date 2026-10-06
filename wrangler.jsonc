@@ -7,5 +7,12 @@
     "directory": "./public",
     "binding": "ASSETS",
     "run_worker_first": ["/api/*"]
-  }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "refit-db",
+      "database_id": "ee4d6bb5-2d77-43f1-bc12-c375346d5cae"
+    }
+  ]
 }
