@@ -712,10 +712,9 @@ const thumb = (p, n) => p.img
         ? `<button onclick="dl(${p.id})">Download 3D file</button>` : '';
       const cartBtn = p.k != 'print'
         ? `<button class="alt" onclick="add(${p.id})">Add to cart, ${money(p.price)}</button>` : '';
-      const loginHint = me
-        ? ''
-        : '<p class="mut">You need a free account to download or buy. <a href="#/login" onclick="next=location.hash">Log in</a></p>';
-
+      const loginHint = me ? '' : (p.k != 'print'
+        ? '<p class="mut">You need a free account to buy printed parts. <a href="#/login" onclick="next=location.hash">Log in</a></p>'
+        : '');
       const printDetails = p.k != 'buy'
         ? `<dt>Material</dt><dd>${p.mat.replace('_', ' ')}</dd>
            <dt>Infill</dt><dd>${p.inf}%</dd>
@@ -774,7 +773,6 @@ const thumb = (p, n) => p.img
     }
 
     async function dl(id) {
-      if (!me) return gate();
       const r = await fetch('/api/download/' + id);
       if (!r.ok) {
         const d = await r.json().catch(() => ({}));

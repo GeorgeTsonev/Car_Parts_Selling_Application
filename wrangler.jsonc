@@ -14,5 +14,9 @@
       "database_name": "refit-db",
       "database_id": "ee4d6bb5-2d77-43f1-bc12-c375346d5cae"
     }
-  ]
+  ],
+  "r2_buckets": [
+  { "binding": "BUCKET", "bucket_name": "carparts" }
+    ],
+    "vars": { "PUBLIC_R2_URL": "https://pub-1e0b26c9ce9a4151b9c6a7dbd2b5eb3d.r2.dev" }
 }

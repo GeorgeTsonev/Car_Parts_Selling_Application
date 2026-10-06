@@ -1,6 +1,0 @@
-{% extends "base.html" %}{% block c %}
-<form><div class="row"><input name="q" value="{{term}}"><button style="flex:0 0 120px">Search</button></div></form>
-<p>{{rows|length}} result(s) for "{{term}}"</p>
-{% for p in rows %}<div class="card"><h3><a href="/part/{{p.part_id}}">{{p.name}}</a></h3><p>{{p.description}}</p>
-<span class="tag">{{p.sku}}</span> <span class="tag">{{p.status}}</span>
-{% if p.is_available_physical %}<span class="tag">Buy &euro;{{p.physical_print_price}}</span>{% endif %}</div>{% endfor %}{% endblock %}

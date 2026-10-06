@@ -1,8 +1,0 @@
-{% extends "base.html" %}{% block c %}
-<div class="card row" style="align-items:center"><div style="flex:0 0 110px"><img class="avatar" src="{{u.avatar_url or '/static/car_generic.svg'}}"></div>
-<div><h2>{{u.name}} <small>@{{u.username}}</small></h2><p>{{u.bio or 'No bio yet.'}}</p><p>Contact: {{u.contact_info or '-'}} &middot; Reputation {{u.reputation_score}}</p></div></div>
-{% if own %}<div class="card"><h3>Edit profile</h3><form method="post" enctype="multipart/form-data">
-<input name="name" value="{{u.name}}"><textarea name="bio" placeholder="Short bio">{{u.bio or ''}}</textarea>
-<input name="contact" placeholder="Contact info" value="{{u.contact_info or ''}}"><input type="file" name="avatar" accept="image/*"><button>Save</button></form></div>{% endif %}
-<div class="card"><h3>Creations</h3><ul>{% for c in creations %}<li><a href="/part/{{c.part_id}}">{{c.name}}</a> <span class="tag">{{c.status}}</span></li>{% else %}<li>None yet.</li>{% endfor %}</ul></div>
-{% if own %}<div class="card"><h3>Orders</h3><ul>{% for o in orders %}<li>#{{o.order_id}} &euro;{{o.total_amount}} - {{o.order_status}}</li>{% else %}<li>None.</li>{% endfor %}</ul></div>{% endif %}{% endblock %}

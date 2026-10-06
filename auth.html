@@ -1,5 +1,0 @@
-{% extends "base.html" %}{% block c %}<div class="card" style="max-width:400px;margin:auto">
-<h2>{{'Create account' if mode=='signup' else 'Log in'}}</h2><form method="post">
-{% if mode=='signup' %}<label>Username</label><input name="username" required><label>Email</label><input type="email" name="email" required>
-{% else %}<label>Email or username</label><input name="login" required>{% endif %}
-<label>Password</label><input type="password" name="password" required minlength="8"><button>Submit</button></form></div>{% endblock %}

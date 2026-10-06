@@ -17,6 +17,26 @@ async def q(env, sql, *args):
     rows = res.results
     return [r.to_py() if hasattr(r, "to_py") else r for r in rows]
 
+async def run(env, sql, *args):
+    return await env.DB.prepare(sql).bind(*args).run()
+
+async def pbkdf2(password, salt, iterations):
+    key = await crypto.subtle.importKey(
+        "raw", TextEncoder.new().encode(password), "PBKDF2", False, to_js(["deriveBits"])
+    )
+    params = to_js(
+        {"name": "PBKDF2", "hash": "SHA-256",
+         "salt": Uint8Array.new(to_js(list(salt))), "iterations": iterations},
+        dict_converter=Object.fromEntries,
+    )
+    bits = await crypto.subtle.deriveBits(params, key, 256)
+    return bytes(Uint8Array.new(bits).to_py())
+
+
+async def hash_password(pw):
+    salt = secrets.token_bytes(16)
+    h = await pbkdf2(pw, salt, ITER)
+    return f"pbkdf2${ITER}${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
 
 @app.get("/api/health")
 async def health():
@@ -40,14 +60,13 @@ async def catalog(request: Request):
                        p.author_user_id, u.username AS author
                 FROM Parts p JOIN Users u ON u.user_id = p.author_user_id"""),
             "compat": await q(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities"),
-            "files": await q(env, "SELECT file_id, part_id, file_type, file_name, recommended_material, recommended_infill_pct, supports_required FROM Part_Files"),
+            "files": await public_files(env),
         }
     except Exception:
         return PlainTextResponse(traceback.format_exc(), status_code=500)
 
 ITER = 100_000
 COOKIE = "rf_session"
-
 
 class SignupIn(BaseModel):
     username: str
@@ -60,28 +79,6 @@ class LoginIn(BaseModel):
     email: str
     password: str
 
-
-async def run(env, sql, *args):
-    return await env.DB.prepare(sql).bind(*args).run()
-
-
-async def pbkdf2(password, salt, iterations):
-    key = await crypto.subtle.importKey(
-        "raw", TextEncoder.new().encode(password), "PBKDF2", False, to_js(["deriveBits"])
-    )
-    params = to_js(
-        {"name": "PBKDF2", "hash": "SHA-256",
-         "salt": Uint8Array.new(to_js(list(salt))), "iterations": iterations},
-        dict_converter=Object.fromEntries,
-    )
-    bits = await crypto.subtle.deriveBits(params, key, 256)
-    return bytes(Uint8Array.new(bits).to_py())
-
-
-async def hash_password(pw):
-    salt = secrets.token_bytes(16)
-    h = await pbkdf2(pw, salt, ITER)
-    return f"pbkdf2${ITER}${base64.b64encode(salt).decode()}${base64.b64encode(h).decode()}"
 
 
 async def verify_password(pw, stored):
@@ -249,11 +246,11 @@ async def update_profile(data: ProfileIn, request: Request):
     rows = await q(env, "SELECT * FROM Users WHERE user_id = ?", user["user_id"])
     return public_user(rows[0])
 
-
 @app.get("/api/download/{part_id}")
 async def download(part_id: int, request: Request):
     env = request.scope["env"]
-    user = await require_user(request)
+    user = await current_user(request, env)
+    uid = user["user_id"] if user else 0
     files = await q(env, "SELECT file_id, r2_object_key, file_name FROM Part_Files "
                          "WHERE part_id = ? ORDER BY file_id LIMIT 1", part_id)
     if not files:
@@ -264,12 +261,159 @@ async def download(part_id: int, request: Request):
         raise HTTPException(404, "File not found in storage.")
     data = bytes((await obj.arrayBuffer()).to_py())
     await run(env, "INSERT INTO Part_Download_Logs(part_id, file_id, user_id, ip_country) "
-                   "VALUES(?, ?, ?, ?)",
-              part_id, f["file_id"], user["user_id"],
-              (request.headers.get("cf-ipcountry") or "")[:2])
+                   "VALUES(?, ?, NULLIF(?, 0), ?)",
+              part_id, f["file_id"], uid, (request.headers.get("cf-ipcountry") or "")[:2])
     safe = f["file_name"].replace('"', "").replace("\n", "")
     return Response(content=data, media_type="application/octet-stream",
                     headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+
+
+# ---------- Uploads ----------
+CATEGORIES = {"interior", "exterior", "underhood", "trim_clip", "lighting_bracket"}
+LICENSES = {"CC0", "CC-BY-4.0", "CC-BY-SA-4.0", "CERN-OHL-P-2.0", "CERN-OHL-S-2.0"}
+MATERIALS = {"PLA", "PETG", "ABS", "ASA", "PA_CF", "TPU"}
+MODEL_EXT = {"stl", "3mf", "step", "stp"}
+IMAGE_EXT = {"jpg", "jpeg", "png", "webp"}
+LIMITS = {"model": 25 * 1024 * 1024, "image": 5 * 1024 * 1024, "avatar": 2 * 1024 * 1024}
+CTYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+
+class PartIn(BaseModel):
+    name: str
+    description: str
+    category: str
+    license: str
+    generation_id: int
+    file_key: str
+    image_key: str = ""
+    steps: str = ""
+    material: str = "PETG"
+    infill: int = 40
+
+
+class AvatarIn(BaseModel):
+    key: str
+
+
+def safe_name(name):
+    base = name.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    cleaned = "".join(c if c.isalnum() or c in "._-" else "_" for c in base)[:80]
+    return cleaned or "file"
+
+
+def public_url(env, key):
+    return str(env.PUBLIC_R2_URL).rstrip("/") + "/" + key
+
+
+def looks_like_image(data):
+    return (data[:3] == b"\xff\xd8\xff"
+            or data[:8] == b"\x89PNG\r\n\x1a\n"
+            or (data[:4] == b"RIFF" and data[8:12] == b"WEBP"))
+
+
+@app.post("/api/upload/{kind}")
+async def upload(kind: str, filename: str, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    uid = user["user_id"]
+
+    if kind not in LIMITS:
+        raise HTTPException(404, "Unknown upload type.")
+
+    name = safe_name(filename)
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    if ext not in (MODEL_EXT if kind == "model" else IMAGE_EXT):
+        raise HTTPException(400, "This file type is not allowed.")
+
+    if int(request.headers.get("content-length") or 0) > LIMITS[kind]:
+        raise HTTPException(413, "The file is too large.")
+    data = await request.body()
+    if not data or len(data) > LIMITS[kind]:
+        raise HTTPException(413, "The file is empty or too large.")
+
+    token = secrets.token_hex(8)
+
+    if kind == "model":
+        key = f"parts/{uid}/{token}-{name}"
+        await env.BUCKET.put(key, to_js(data))
+        return {"key": key, "size": len(data)}
+
+    if not looks_like_image(data):
+        raise HTTPException(400, "This does not look like a valid image.")
+    key = f"{'avatars' if kind == 'avatar' else 'images'}/{uid}/{token}.{ext}"
+    opts = to_js({"httpMetadata": {"contentType": CTYPES[ext]}},
+                 dict_converter=Object.fromEntries)
+    await env.BUCKET.put(key, to_js(data), opts)
+    return {"key": key, "url": public_url(env, key)}
+
+
+@app.post("/api/parts")
+async def create_part(data: PartIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    uid = user["user_id"]
+
+    name, desc = data.name.strip(), data.description.strip()
+    if not (3 <= len(name) <= 150) or not desc:
+        raise HTTPException(400, "Enter a name (3+ characters) and a description.")
+    if (data.category not in CATEGORIES or data.license not in LICENSES
+            or data.material not in MATERIALS):
+        raise HTTPException(400, "Invalid category, license or material.")
+    if not (5 <= data.infill <= 100):
+        raise HTTPException(400, "Infill must be between 5 and 100.")
+    if not data.file_key.startswith(f"parts/{uid}/"):
+        raise HTTPException(400, "Invalid file reference.")
+    if data.image_key and not data.image_key.startswith(f"images/{uid}/"):
+        raise HTTPException(400, "Invalid picture reference.")
+    if not await q(env, "SELECT generation_id FROM Vehicle_Generations WHERE generation_id = ?",
+                   data.generation_id):
+        raise HTTPException(400, "Choose a valid car generation.")
+
+    head = await env.BUCKET.head(data.file_key)
+    if head is None:
+        raise HTTPException(400, "The uploaded file was not found. Please upload it again.")
+
+    ext = data.file_key.rsplit(".", 1)[-1].lower()
+    ftype = {"3mf": "mesh_3mf", "step": "cad_step", "stp": "cad_step"}.get(ext, "mesh_stl")
+    fname = data.file_key.rsplit("/", 1)[-1].split("-", 1)[-1]
+    image_url = public_url(env, data.image_key) if data.image_key else ""
+    steps = data.steps.strip()[:4000] or "The author has not added removal steps yet."
+
+    rows = await q(env,
+        "INSERT INTO Parts(sku, name, description, category, disassembly_instructions, "
+        "author_user_id, license, image_url, status) "
+        "VALUES(?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), 'draft') RETURNING part_id",
+        "U-" + secrets.token_hex(6), name, desc, data.category, steps, uid,
+        data.license, image_url)
+    pid = rows[0]["part_id"]
+
+    await run(env, "INSERT INTO Part_Compatibilities(part_id, generation_id, hotspot_x, hotspot_y) "
+                   "VALUES(?, ?, 50, 50)", pid, data.generation_id)
+    await run(env, "INSERT INTO Part_Files(part_id, file_type, r2_object_key, file_name, "
+                   "file_size_bytes, recommended_material, recommended_infill_pct) "
+                   "VALUES(?, ?, ?, ?, ?, ?, ?)",
+              pid, ftype, data.file_key, fname, int(head.size), data.material, data.infill)
+    return {"part_id": pid}
+
+
+@app.put("/api/profile/avatar")
+async def set_avatar(data: AvatarIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    if not data.key.startswith(f"avatars/{user['user_id']}/"):
+        raise HTTPException(400, "Invalid picture reference.")
+    await run(env, "UPDATE Users SET avatar_url = ? WHERE user_id = ?",
+              public_url(env, data.key), user["user_id"])
+    rows = await q(env, "SELECT * FROM Users WHERE user_id = ?", user["user_id"])
+    return public_user(rows[0])
+# ---------- End uploads ----------
+async def public_files(env):
+    rows = await q(env, "SELECT file_id, part_id, file_type, file_name, r2_object_key, "
+                        "recommended_material, recommended_infill_pct, supports_required FROM Part_Files")
+    for r in rows:
+        r["url"] = public_url(env, r.pop("r2_object_key"))
+    return rows
+
 
 class Default(WorkerEntrypoint):
     async def fetch(self, request):
