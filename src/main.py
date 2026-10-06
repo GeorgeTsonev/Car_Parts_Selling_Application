@@ -246,26 +246,21 @@ async def update_profile(data: ProfileIn, request: Request):
     rows = await q(env, "SELECT * FROM Users WHERE user_id = ?", user["user_id"])
     return public_user(rows[0])
 
+from fastapi.responses import RedirectResponse
 @app.get("/api/download/{part_id}")
 async def download(part_id: int, request: Request):
     env = request.scope["env"]
     user = await current_user(request, env)
     uid = user["user_id"] if user else 0
-    files = await q(env, "SELECT file_id, r2_object_key, file_name FROM Part_Files "
+    files = await q(env, "SELECT file_id, r2_object_key FROM Part_Files "
                          "WHERE part_id = ? ORDER BY file_id LIMIT 1", part_id)
     if not files:
         raise HTTPException(404, "No file is attached to this part yet.")
     f = files[0]
-    obj = await env.BUCKET.get(f["r2_object_key"])
-    if obj is None:
-        raise HTTPException(404, "File not found in storage.")
-    data = bytes((await obj.arrayBuffer()).to_py())
     await run(env, "INSERT INTO Part_Download_Logs(part_id, file_id, user_id, ip_country) "
                    "VALUES(?, ?, NULLIF(?, 0), ?)",
               part_id, f["file_id"], uid, (request.headers.get("cf-ipcountry") or "")[:2])
-    safe = f["file_name"].replace('"', "").replace("\n", "")
-    return Response(content=data, media_type="application/octet-stream",
-                    headers={"Content-Disposition": f'attachment; filename="{safe}"'})
+    return RedirectResponse(public_url(env, f["r2_object_key"]), status_code=302)
 
 
 # ---------- Uploads ----------
@@ -335,7 +330,11 @@ async def upload(kind: str, filename: str, request: Request):
 
     if kind == "model":
         key = f"parts/{uid}/{token}-{name}"
-        await env.BUCKET.put(key, to_js(data))
+        opts = to_js({"httpMetadata": {
+            "contentType": "application/octet-stream",
+            "contentDisposition": f'attachment; filename="{name}"'}},
+            dict_converter=Object.fromEntries)
+        await env.BUCKET.put(key, to_js(data), opts)
         return {"key": key, "size": len(data)}
 
     if not looks_like_image(data):

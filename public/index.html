@@ -788,17 +788,8 @@ const thumb = (p, n) => p.img
   return false;
     }
 
-    async function dl(id) {
-      const r = await fetch('/api/download/' + id);
-      if (!r.ok) {
-        const d = await r.json().catch(() => ({}));
-        return toast(typeof d.detail === 'string' ? d.detail : 'The download failed.');
-      }
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(await r.blob());
-      a.download = find(id).file?.file_name || 'part';
-      a.click();
-      URL.revokeObjectURL(a.href);
+    function dl(id) {
+      location.href = '/api/download/' + id;
     }
     async function add(id) {
       if (!me) return gate();
