@@ -395,7 +395,7 @@ async def create_part(data: PartIn, request: Request):
     pid = rows[0]["part_id"]
 
     await run(env, "INSERT INTO Part_Compatibilities(part_id, generation_id, hotspot_x, hotspot_y) "
-                   "VALUES(?, ?, 50, 50)", pid, data.generation_id)
+                   "VALUES(?, ?, NULL, NULL)", pid, data.generation_id)
     await run(env, "INSERT INTO Part_Files(part_id, file_type, r2_object_key, file_name, "
                    "file_size_bytes, recommended_material, recommended_infill_pct, supports_required) "
                    "VALUES(?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)",
@@ -534,6 +534,35 @@ async def admin_delete_part(part_id: int, request: Request):
             await env.BUCKET.delete(f["r2_object_key"])
         except Exception:
             pass
+    return {"ok": True}
+class PinIn(BaseModel):
+    part_id: int
+    x: float | None = None
+    y: float | None = None
+
+
+class HotspotsIn(BaseModel):
+    generation_id: int
+    pins: list[PinIn]
+
+
+@app.put("/api/admin/hotspots")
+async def admin_hotspots(data: HotspotsIn, request: Request):
+    env = request.scope["env"]
+    await require_admin(request)
+    if not data.pins or len(data.pins) > 200:
+        raise HTTPException(400, "Send between 1 and 200 pins.")
+    for p in data.pins:
+        if (p.x is None) != (p.y is None):
+            raise HTTPException(400, "Give both x and y, or neither.")
+        if p.x is not None and not (0 <= p.x <= 100 and 0 <= p.y <= 100):
+            raise HTTPException(400, "Positions must be between 0 and 100.")
+    for p in data.pins:
+        x = -1 if p.x is None else round(p.x, 1)
+        y = -1 if p.y is None else round(p.y, 1)
+        await run(env, "UPDATE Part_Compatibilities SET hotspot_x = NULLIF(?, -1), "
+                       "hotspot_y = NULLIF(?, -1) WHERE part_id = ? AND generation_id = ?",
+                  x, y, p.part_id, data.generation_id)
     return {"ok": True}
 # ---------- End admin ----------
 SPEC_SCHEMA = {

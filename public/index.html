@@ -423,6 +423,40 @@
     .techbtn span { display: block; padding: 9px 22px; border: 1px solid var(--line); border-radius: 8px; font-weight: 800; color: var(--ink); background: var(--card); }
     .techbtn input:checked + span { background: var(--acc); color: var(--on); border-color: var(--acc); }
     .techbtn input:focus-visible + span { outline: 3px solid var(--mk); outline-offset: 2px; }
+    .carhead { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+    .carhead h1 { margin: .2em 0 .3em; }
+
+    .pinlayer { position: absolute; inset: 0; pointer-events: none; }
+    .pin.edit {
+      pointer-events: auto; cursor: grab; touch-action: none;
+      padding: 0; border: 0; user-select: none;
+    }
+    .pin.edit:active { cursor: grabbing; }
+    .pin.sel {
+      background: #1f6fe0; z-index: 3;
+      box-shadow: 0 0 0 3px #fff, 0 0 0 6px #1f6fe0;
+    }
+    .car .pic img { user-select: none; }
+
+    .editbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+    .editgrid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+    .editgrid .car { position: sticky; top: 72px; margin: 0; }
+    @media (max-width: 900px) {
+      .editgrid { grid-template-columns: 1fr; }
+      .editgrid .car { position: static; }
+    }
+
+    .erow { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+    .erow.sel { border-color: #1f6fe0; box-shadow: 0 0 0 2px #1f6fe0 inset; }
+    .etop { display: flex; gap: 10px; align-items: center; }
+    .etop .mut { margin-left: auto; font-size: 14px; }
+    .enum { min-width: 24px; height: 24px; border-radius: 12px; background: var(--mk); color: #fff; font: 800 13px/24px Barlow, sans-serif; text-align: center; padding: 0 6px; }
+    .erow.sel .enum { background: #1f6fe0; }
+    .epos { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+    .epos label { display: flex; gap: 4px; align-items: center; font-size: 13px; }
+    .epos input { width: 84px; padding: 6px 8px; }
+    .epos button { padding: 6px 12px; }
+    .epos button:disabled { opacity: .45; cursor: default; }
   </style>
 </head>
 
@@ -579,7 +613,7 @@ async function load() {
       cat: x.category,
       oem: x.oem_part_number || '',
       g: comp.map(c => c.generation_id),
-      hot: Object.fromEntries(comp.map(c => [c.generation_id, [c.hotspot_x ?? 50, c.hotspot_y ?? 50]])),
+      hot: Object.fromEntries(comp.filter(c => c.hotspot_x != null && c.hotspot_y != null).map(c => [c.generation_id, [c.hotspot_x, c.hotspot_y]])),
       pos: [300, 150],
       k: x.is_available_physical ? (file ? 'both' : 'buy') : 'print',
       mat: x.material || file?.recommended_material || 'PETG',
@@ -750,22 +784,26 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Car page (diagram with hotspots)
        ===================================================== */
-    function car(id) {
+    function car(id, edit) {
       const gen = G.find(x => x.id == id);
       if (!gen) return home();
+      if (edit) return carEdit(gen, edit.focus);
+
       const parts = all().filter(p => p.g.includes(gen.id));
-      const pos = p => (p.hot && p.hot[gen.id]) || [50, 50];
+      const pinOf = p => (p.hot && p.hot[gen.id]) || null;
 
       let diagram;
       if (gen.img) {
         const pins = parts.map((p, i) => {
-          const [x, y] = pos(p);
-          return `<a class="pin" style="left:${x}%;top:${y}%" href="#/part/${p.id}" title="${esc(p.name)}">${i + 1}</a>`;
+          const h = pinOf(p);
+          return h ? `<a class="pin" style="left:${h[0]}%;top:${h[1]}%" href="#/part/${p.id}" title="${esc(p.name)}">${i + 1}</a>` : '';
         }).join('');
         diagram = `<div class="car"><div class="pic"><img src="${esc(gen.img)}" alt="${esc(gname(id))}">${pins}</div></div>`;
       } else {
         const hotspots = parts.map((p, i) => {
-          const [px, py] = pos(p), x = px * 6, y = py * 2.6;
+          const h = pinOf(p);
+          if (!h) return '';
+          const x = h[0] * 6, y = h[1] * 2.6;
           return `<a href="#/part/${p.id}"><g class="hs">
             <line x1="${x}" y1="${y - 20}" x2="${x}" y2="${y - 3}" marker-end="url(#ar)"/>
             <circle cx="${x}" cy="${y - 30}" r="10"/><text x="${x}" y="${y - 26}">${i + 1}</text>
@@ -784,12 +822,268 @@ const thumb = (p, n) => p.img
 
       view(`
         <a href="#/">← Change car</a>
-        <h1>${esc(gname(id))}</h1>
+        <div class="carhead">
+          <h1>${esc(gname(id))}</h1>
+          ${isAdmin ? `<a class="btn ghost" href="#/car/${id}/edit">Edit pins</a>` : ''}
+        </div>
         <p class="mut">${parts.length} parts available. Select a numbered pin or a part below.</p>
         ${diagram}
         <h2>All parts for this car</h2>
         ${parts.map((p, i) => row(p, i + 1)).join('')
           || '<p class="mut">No parts yet. Be the first to upload one from your profile.</p>'}`);
+    }
+
+    /* ---------- Pin editor (admins only) ---------- */
+    let EDIT = null, editTimer = null;
+
+    const r1 = v => {
+      v = +v;
+      return isNaN(v) ? 50 : Math.round(Math.min(100, Math.max(0, v)) * 10) / 10;
+    };
+
+    function carEdit(gen, focus) {
+      if (!gen.img) {
+        view(`<a href="#/car/${gen.id}">← Back to car</a>
+          <h1>${esc(gname(gen.id))}</h1>
+          <p class="mut">This car has no photo yet, so pins can't be placed. Add a photo for it in Admin first.</p>`);
+        return;
+      }
+      const parts = all().filter(p => p.g.includes(gen.id));
+      const cur = {}, orig = {};
+      parts.forEach(p => {
+        const h = p.hot && p.hot[gen.id];
+        cur[p.id] = h ? [h[0], h[1]] : null;
+        orig[p.id] = h ? [h[0], h[1]] : null;
+      });
+      EDIT = { gen, parts, cur, orig, dirty: new Set(), drag: null, justDragged: false,
+              sel: focus && parts.some(p => p.id === focus) ? focus : null, chain: null };
+
+      view(`
+        <div class="carhead"><h1>Edit pins · ${esc(gname(gen.id))}</h1></div>
+        <p class="mut">Drag a pin, or select a part and click the photo to place it. Type exact values in the fields,
+          or press the arrow keys on a selected pin to nudge it by 0.1% (hold Shift for 1%). Every change saves automatically.</p>
+        <div class="editbar">
+          <button onclick="editSave()">Save positions</button>
+          <button class="ghost" onclick="editCancel()">Cancel</button>
+          <span id="editstat" class="mut"></span>
+        </div>
+        <p id="edithint" class="mut"></p>
+        <div class="editgrid">
+          <div class="car"><div class="pic" id="epic">
+            <img src="${esc(gen.img)}" alt="${esc(gname(gen.id))}" draggable="false">
+            <div class="pinlayer" id="pins"></div>
+          </div></div>
+          <div id="elist"></div>
+        </div>`);
+
+      const pic = $('#epic');
+      pic.addEventListener('pointerdown', onPinDown);
+      pic.addEventListener('pointermove', onPinMove);
+      pic.addEventListener('pointerup', onPinUp);
+      pic.addEventListener('pointercancel', onPinUp);
+      pic.addEventListener('click', onPhotoClick);
+      pic.addEventListener('keydown', onPinKey);
+      renderPins(); renderList(); updateHint();
+    }
+
+    function renderPins() {
+      const E = EDIT;
+      $('#pins').innerHTML = E.parts.map((p, i) => {
+        const c = E.cur[p.id];
+        return c
+          ? `<button type="button" class="pin edit${p.id === E.sel ? ' sel' : ''}" data-pid="${p.id}"
+              style="left:${c[0]}%;top:${c[1]}%" aria-label="Part ${i + 1}: ${esc(p.name)}"
+              title="${esc(p.name)}">${i + 1}</button>`
+          : '';
+      }).join('');
+    }
+
+    function renderList() {
+      const E = EDIT;
+      $('#elist').innerHTML = E.parts.map((p, i) => {
+        const c = E.cur[p.id];
+        return `
+          <div class="erow${p.id === E.sel ? ' sel' : ''}" data-pid="${p.id}" onclick="selectPart(${p.id})">
+            <div class="etop"><b class="enum">${i + 1}</b><span>${esc(p.name)}</span>
+              <span class="mut">${c ? 'placed' : 'not placed'}</span></div>
+            <div class="epos">
+              <label>X % <input id="x-${p.id}" type="number" min="0" max="100" step="0.1" value="${c ? c[0] : ''}" onchange="numEdit(${p.id})"></label>
+              <label>Y % <input id="y-${p.id}" type="number" min="0" max="100" step="0.1" value="${c ? c[1] : ''}" onchange="numEdit(${p.id})"></label>
+              <button type="button" class="ghost" onclick="removePin(${p.id}, event)"${c ? '' : ' disabled'}>Remove pin</button>
+            </div>
+          </div>`;
+      }).join('') || '<p class="mut">No parts for this car yet.</p>';
+    }
+
+    function updateHint() {
+      const h = $('#edithint');
+      if (!h || !EDIT) return;
+      const i = EDIT.parts.findIndex(p => p.id === EDIT.sel);
+      h.textContent = i < 0
+        ? 'Select a part to move it or place it.'
+        : EDIT.cur[EDIT.sel]
+          ? `Part ${i + 1} is selected (blue pin). Drag it, use the arrow keys, or edit its fields.`
+          : `Part ${i + 1} is not placed yet. Click the photo to place it.`;
+    }
+
+    function setStat(t) { const s = $('#editstat'); if (s) s.textContent = t; }
+
+    function selectPart(pid) {
+      EDIT.sel = pid;
+      document.querySelectorAll('#pins .pin').forEach(el => el.classList.toggle('sel', +el.dataset.pid === pid));
+      document.querySelectorAll('#elist .erow').forEach(el => el.classList.toggle('sel', +el.dataset.pid === pid));
+      updateHint();
+    }
+
+    function eventPct(e) {
+      const r = $('#epic img').getBoundingClientRect();
+      return [r1((e.clientX - r.left) / r.width * 100), r1((e.clientY - r.top) / r.height * 100)];
+    }
+
+    function setPin(pid, x, y) {
+      EDIT.cur[pid] = [x, y];
+      const el = document.querySelector(`#pins .pin[data-pid="${pid}"]`);
+      if (el) { el.style.left = x + '%'; el.style.top = y + '%'; }
+      const xi = $('#x-' + pid), yi = $('#y-' + pid);
+      if (xi) xi.value = x;
+      if (yi) yi.value = y;
+    }
+
+    function onPinDown(e) {
+      const el = e.target.closest('.pin');
+      if (!el || e.button > 0) return;
+      e.preventDefault();
+      const pid = +el.dataset.pid;
+      selectPart(pid);
+      el.focus();
+      el.setPointerCapture(e.pointerId);
+      EDIT.drag = { pid, el };
+    }
+
+    function onPinMove(e) {
+      if (!EDIT || !EDIT.drag) return;
+      const [x, y] = eventPct(e);
+      setPin(EDIT.drag.pid, x, y);
+    }
+
+    function onPinUp(e) {
+      if (!EDIT || !EDIT.drag) return;
+      const { pid, el } = EDIT.drag;
+      try { el.releasePointerCapture(e.pointerId); } catch (x) {}
+      EDIT.drag = null;
+      EDIT.justDragged = true;
+      setTimeout(() => { if (EDIT) EDIT.justDragged = false; }, 60);
+      queueSave(pid);
+    }
+
+    function onPhotoClick(e) {
+      if (!EDIT || e.target.closest('.pin') || EDIT.justDragged) return;
+      if (EDIT.sel == null) { const h = $('#edithint'); if (h) h.textContent = 'Select a part first, then click the photo.'; return; }
+      const [x, y] = eventPct(e);
+      EDIT.cur[EDIT.sel] = [x, y];
+      renderPins(); renderList(); updateHint();
+      queueSave(EDIT.sel);
+    }
+
+    function onPinKey(e) {
+      const el = e.target.closest('.pin');
+      const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (!el || !d) return;
+      e.preventDefault();
+      const pid = +el.dataset.pid, c = EDIT.cur[pid], step = e.shiftKey ? 1 : 0.1;
+      selectPart(pid);
+      setPin(pid, r1(c[0] + d[0] * step), r1(c[1] + d[1] * step));
+      queueSave(pid);
+    }
+
+    function numEdit(pid) {
+      const xs = $('#x-' + pid).value, ys = $('#y-' + pid).value;
+      if (xs === '' && ys === '') return;
+      const x = r1(xs === '' ? 50 : xs), y = r1(ys === '' ? 50 : ys);
+      const wasPlaced = !!EDIT.cur[pid];
+      EDIT.cur[pid] = [x, y];
+      if (wasPlaced) setPin(pid, x, y); else { renderPins(); renderList(); }
+      updateHint();
+      queueSave(pid);
+    }
+
+    function removePin(pid, ev) {
+      ev.stopPropagation();
+      EDIT.cur[pid] = null;
+      renderPins(); renderList(); updateHint();
+      queueSave(pid);
+    }
+
+    function queueSave(pid) {
+      EDIT.dirty.add(pid);
+      setStat('Saving…');
+      clearTimeout(editTimer);
+      editTimer = setTimeout(flushSaves, 300);
+    }
+
+    function flushSaves() {
+      clearTimeout(editTimer);
+      const E = EDIT;
+      if (!E) return Promise.resolve(true);
+      E.chain = (E.chain || Promise.resolve()).then(() => doSaves(E));
+      return E.chain;
+    }
+
+    async function doSaves(E) {
+      if (!E.dirty.size) return true;
+      const ids = [...E.dirty];
+      E.dirty.clear();
+      const pins = ids.map(pid => {
+        const c = E.cur[pid];
+        return { part_id: pid, x: c ? c[0] : null, y: c ? c[1] : null };
+      });
+      try {
+        await api('PUT', '/api/admin/hotspots', { generation_id: E.gen.id, pins });
+        ids.forEach(pid => {
+          const p = find(pid), c = E.cur[pid];
+          if (!p) return;
+          p.hot = p.hot || {};
+          if (c) p.hot[E.gen.id] = [c[0], c[1]]; else delete p.hot[E.gen.id];
+        });
+        if (EDIT === E) setStat('Saved ✓');
+        return true;
+      } catch (err) {
+        ids.forEach(pid => E.dirty.add(pid));
+        if (EDIT === E) setStat('Not saved: ' + err.message);
+        toast(err.message);
+        return false;
+      }
+    }
+
+    async function editSave() {
+      const E = EDIT;
+      if (!E) return;
+      if (!(await flushSaves())) return;
+      EDIT = null;
+      await load();
+      toast('Positions saved.');
+      location.hash = '#/car/' + E.gen.id;
+    }
+
+    async function editCancel() {
+      const E = EDIT;
+      if (!E) return;
+      clearTimeout(editTimer);
+      E.dirty.clear();
+      await E.chain;
+      const changed = E.parts.filter(p => JSON.stringify(E.cur[p.id]) !== JSON.stringify(E.orig[p.id]));
+      if (changed.length && !confirm('Discard this session\'s changes and restore the earlier positions?')) return;
+      if (changed.length) {
+        try {
+          await api('PUT', '/api/admin/hotspots', {
+            generation_id: E.gen.id,
+            pins: changed.map(p => ({ part_id: p.id, x: E.orig[p.id] ? E.orig[p.id][0] : null, y: E.orig[p.id] ? E.orig[p.id][1] : null }))
+          });
+        } catch (err) { toast(err.message); return; }
+      }
+      EDIT = null;
+      await load();
+      location.hash = '#/car/' + E.gen.id;
     }
 
     /* =====================================================
@@ -1222,11 +1516,16 @@ const thumb = (p, n) => p.img
     function partCard(p) {
       const cars = p.g.map(gname).filter(Boolean).join(', ') || 'No car assigned';
       const kind = p.k === 'print' ? 'Schematic only' : `Sold as printed, ${money(p.price)}`;
+      const place = p.g.length
+      ? `<div class="mut">Place pin on: ${p.g.map(g =>
+          `<a href="#/car/${g}/edit/${p.id}">${esc(gname(g))}</a> (${p.hot && p.hot[g] ? 'placed' : 'not placed'})`).join(' · ')}</div>`
+      : '<div class="mut">No car assigned, so there is nothing to place.</div>';
       return `
         <div class="card">
           <div><b>${esc(p.name)}</b> <span class="mut">by ${esc(p.au)}</span></div>
           <div class="mut">${esc((p.cat || '').replace('_', ' '))} · ${kind} · OEM ${esc(p.oem || '—')} · Added ${esc((p.added || '').slice(0, 10) || '—')}</div>
           <div class="mut">${esc(cars)}</div>
+          ${place}
           <div class="sf">
             <select onchange="setSt(${p.id}, this.value)" aria-label="Status">
               ${Object.keys(ST).map(s => `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
@@ -1449,12 +1748,13 @@ const thumb = (p, n) => p.img
        Routing & startup
        ===================================================== */
     function route() {
-      const [, page, arg] = location.hash.split('/');
+      const [, page, arg, mode, extra] = location.hash.split('/');
       const param = decodeURIComponent(arg || '');
       window.scrollTo(0, 0);
+      if (EDIT) { flushSaves(); EDIT = null; }
 
       const routes = {
-        car:     () => car(+param),
+        car:     () => car(+param, mode === 'edit' && isAdmin ? { focus: +extra || null } : null),
         search:  () => search(param),
         part:    () => part(+param),
         login:   () => authForm('login'),
@@ -1463,7 +1763,6 @@ const thumb = (p, n) => p.img
         cart:    cartv,
         admin:   admin
       };
-
       (routes[page] || home)();
     }
 
