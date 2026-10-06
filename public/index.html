@@ -395,7 +395,7 @@
       font: 800 13px/26px Barlow, sans-serif; text-align: center; text-decoration: none;
       box-shadow: 0 0 0 3px rgba(255, 255, 255, .85);
     }
-    .prev img { width: 100%; max-width: 420px; border-radius: 10px; margin: 8px 0; display: block; }
+    .prev img { width: 100%; max-width: 420px; border-radius: 10px; display: block; margin-bottom: 6px; }
     .cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 10px 0; }
     .carcard {
       background: var(--card); border: 1px solid var(--line); border-radius: 10px;
@@ -536,8 +536,8 @@ async function load() {
 
   M = d.models;
   B = d.brands
-    .map(b => ({ id: b.brand_id, n: b.name }))
-    .sort((a, b) => a.n.localeCompare(b.n));
+  .map(b => ({ id: b.brand_id, n: b.name, logo: b.logo_url }))
+  .sort((a, b) => a.n.localeCompare(b.n));
 
   const modelById = Object.fromEntries(d.models.map(m => [m.model_id, m]));
 
@@ -631,11 +631,11 @@ const thumb = (p, n) => p.img
        Home & search
        ===================================================== */
     function home() {
-      const brandOptions = B.map(b => `<option value="${b.id}">${b.n}</option>`).join('');
+      const brandOptions = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
       const emptyNote = B.length
         ? ''
         : '<p class="mut">The catalog is empty.'
-          + (isAdmin ? ' <a href="#/admin">Import a catalog</a>.' : '') + '</p>';
+          + (isAdmin ? ' <a href="#/admin">Add a brand in Admin</a>.' : '') + '</p>';
 
       view(`
         <section class="hero">
@@ -648,31 +648,44 @@ const thumb = (p, n) => p.img
                 <option value="">Choose a brand</option>${brandOptions}
               </select>
             </label>
-            <label>Model<select id="sm" onchange="showPrev()"></select></label>
-            <div id="prev" class="prev"></div>
+            <label>Model <select id="sm" onchange="showPrev()"></select></label>
             <button onclick="goCar()">Show parts</button>
           </div>
+
           ${emptyNote}
           ${sform()}
+
+          <div class="card prev">
+            <h2>Preview</h2>
+            <div id="prev"><p class="mut">Select a car to see its picture here.</p></div>
+          </div>
         </section>`);
       fillM();
     }
-    function showPrev() {
-      const g = G.find(x => x.id == $('#sm').value);
-      $('#prev').innerHTML = g && g.img
-        ? `<img src="${esc(g.img)}" alt="${esc(gname(g.id))}">` : '';
-    }
     function fillM() {
-      $('#prev').innerHTML = '';
       const brandId = +$('#sb').value;
       const options = G
         .filter(g => g.b == brandId)
         .map(g => `<option value="${g.id}">${esc(g.m)} ${esc(g.g)} (${g.y})</option>`)
         .join('');
-
       $('#sm').innerHTML =
         `<option value="">${brandId ? 'Choose a model' : 'Pick a brand first'}</option>` + options;
       $('#sm').disabled = !brandId;
+      showPrev();
+    }
+
+    const PREV_EMPTY = '<p class="mut">Select a car to see its picture here.</p>';
+
+    function showPrev() {
+      const box = $('#prev');
+      if (!box) return;
+      const g = G.find(x => x.id == $('#sm').value);
+      const b = B.find(x => x.id == $('#sb').value);
+      const url = (g && g.img) || (b && b.logo) || '';
+      const label = g ? gname(g.id) : (b ? b.n : '');
+      box.innerHTML = url
+        ? `<img src="${esc(url)}" alt="${esc(label)}"><p class="mut">${esc(label)}</p>`
+        : PREV_EMPTY;
     }
 
     function goCar() {
