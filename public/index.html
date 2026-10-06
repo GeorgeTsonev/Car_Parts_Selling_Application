@@ -391,6 +391,26 @@
     .aform:first-of-type { border-top: 0; padding-top: 0; }
     .aform h3 { grid-column: 1 / -1; margin: 0; font-size: 17px; }
     .aform button { height: 42px; }
+    .car .pic { position: relative; line-height: 0; }
+    .car .pic img { width: 100%; height: auto; display: block; border-radius: 8px; }
+    .pin {
+      position: absolute; transform: translate(-50%, -50%);
+      width: 26px; height: 26px; border-radius: 50%;
+      background: var(--mk); color: #fff;
+      font: 800 13px/26px Barlow, sans-serif; text-align: center; text-decoration: none;
+      box-shadow: 0 0 0 3px rgba(255, 255, 255, .85);
+    }
+    .prev img { width: 100%; max-width: 420px; border-radius: 10px; margin: 8px 0; display: block; }
+    .cars { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 10px 0; }
+    .carcard {
+      background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+      overflow: hidden; color: var(--ink); text-decoration: none; display: grid;
+    }
+    .carcard img, .carcard .noimg {
+      width: 100%; aspect-ratio: 16 / 10; object-fit: cover;
+      background: var(--bg); display: grid; place-items: center; font-size: 32px;
+    }
+    .carcard span { padding: 8px 10px; font-weight: 600; }
   </style>
 </head>
 
@@ -531,7 +551,7 @@ async function load() {
     m: modelById[g.model_id]?.name || '',
     g: g.generation_name || '',
     y: g.start_year + '–' + (g.end_year || ''),
-    img: g.overview_image_url
+    img: g.overview_image_url || modelById[g.model_id]?.picture_url || ''
   }));
 
   P = d.parts.map(x => {
@@ -635,14 +655,20 @@ const thumb = (p, n) => p.img
             <label>Model<select id="sm"></select></label>
             <button onclick="goCar()">Show parts</button>
           </div>
-
+          <label>Model<select id="sm" onchange="showPrev()"></select></label>
+          <div id="prev" class="prev"></div>
           ${emptyNote}
           ${sform()}
         </section>`);
       fillM();
     }
-
+    function showPrev() {
+      const g = G.find(x => x.id == $('#sm').value);
+      $('#prev').innerHTML = g && g.img
+        ? `<img src="${esc(g.img)}" alt="${esc(gname(g.id))}">` : '';
+    }
     function fillM() {
+      $('#prev').innerHTML = '';
       const brandId = +$('#sb').value;
       const options = G
         .filter(g => g.b == brandId)
@@ -668,66 +694,63 @@ const thumb = (p, n) => p.img
 
     function search(q) {
       const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-
       const results = all().filter(p => {
-        const haystack = [p.name, p.d, p.oem, p.cat.replace('_', ' '), p.g.map(gname).join(' ')]
-          .join(' ').toLowerCase();
-        return terms.every(w => haystack.includes(w));
+        const h = [p.name, p.d, p.oem, p.cat.replace('_', ' '), p.g.map(gname).join(' ')].join(' ').toLowerCase();
+        return terms.every(w => h.includes(w));
       });
-
-      view(`
-        ${sform(q)}
-        <h1>${results.length} result${results.length == 1 ? '' : 's'} for “${esc(q)}”</h1>
-        ${results.map(p => row(p)).join('')
-          || '<p class="mut">No parts match. Try fewer words, or search by the OEM number.</p>'}`);
+      const cars = G.filter(g => terms.every(w => gname(g.id).toLowerCase().includes(w)));
+      const carCards = cars.length
+        ? `<h2>Cars</h2><div class="cars">${cars.map(g => `
+            <a class="carcard" href="#/car/${g.id}">
+              ${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy">` : '<div class="noimg">🚗</div>'}
+              <span>${esc(gname(g.id))}</span>
+            </a>`).join('')}</div>`
+        : '';
+      view(`${sform(q)}${carCards}
+        <h1>${results.length} part${results.length == 1 ? '' : 's'} for “${esc(q)}”</h1>
+        ${results.map(p => row(p)).join('') || '<p class="mut">No parts match. Try fewer words, or search by the OEM number.</p>'}`);
     }
 
     /* =====================================================
        Car page (diagram with hotspots)
        ===================================================== */
-   function car(id) {
+    function car(id) {
       const gen = G.find(x => x.id == id);
       if (!gen) return home();
-
       const parts = all().filter(p => p.g.includes(gen.id));
+      const pos = p => (p.hot && p.hot[gen.id]) || [50, 50];
 
-      const hotspots = parts.map((p, i) => {
-        const h = (p.hot && p.hot[gen.id]) || [50, 50];
-        const x = h[0] * 6, y = h[1] * 2.6;
-        return `
-          <a href="#/part/${p.id}">
-            <g class="hs">
-              <line x1="${x}" y1="${y - 20}" x2="${x}" y2="${y - 3}" marker-end="url(#ar)"/>
-              <circle cx="${x}" cy="${y - 30}" r="10"/>
-              <text x="${x}" y="${y - 26}">${i + 1}</text>
-              <title>${esc(p.name)}</title>
-            </g>
-          </a>`;
-      }).join('');
+      let diagram;
+      if (gen.img) {
+        const pins = parts.map((p, i) => {
+          const [x, y] = pos(p);
+          return `<a class="pin" style="left:${x}%;top:${y}%" href="#/part/${p.id}" title="${esc(p.name)}">${i + 1}</a>`;
+        }).join('');
+        diagram = `<div class="car"><div class="pic"><img src="${esc(gen.img)}" alt="${esc(gname(id))}">${pins}</div></div>`;
+      } else {
+        const hotspots = parts.map((p, i) => {
+          const [px, py] = pos(p), x = px * 6, y = py * 2.6;
+          return `<a href="#/part/${p.id}"><g class="hs">
+            <line x1="${x}" y1="${y - 20}" x2="${x}" y2="${y - 3}" marker-end="url(#ar)"/>
+            <circle cx="${x}" cy="${y - 30}" r="10"/><text x="${x}" y="${y - 26}">${i + 1}</text>
+            <title>${esc(p.name)}</title></g></a>`;
+        }).join('');
+        diagram = `<div class="car"><svg viewBox="0 0 600 260" role="img" aria-label="Side view of the car with part locations">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M0 0L10 5L0 10z" fill="var(--mk)"/></marker></defs>
+          <path class="body" d="M30 178L30 152Q32 136 70 130L178 112L214 82Q232 68 268 68L392 68Q432 70 452 100L536 120Q568 128 570 152L570 178Z"/>
+          <path class="win" d="M222 88L262 76L318 76L318 110L202 110Z"/>
+          <path class="win" d="M326 76L392 76Q420 80 436 108L326 110Z"/>
+          <circle class="wh" cx="150" cy="182" r="34"/><circle class="hub" cx="150" cy="182" r="14"/>
+          <circle class="wh" cx="450" cy="182" r="34"/><circle class="hub" cx="450" cy="182" r="14"/>
+          ${hotspots}</svg></div>`;
+      }
 
       view(`
         <a href="#/">← Change car</a>
         <h1>${esc(gname(id))}</h1>
-        <p class="mut">${parts.length} parts available. Select a numbered arrow or a part below.</p>
-
-        <div class="car">
-          <svg viewBox="0 0 600 260" role="img" aria-label="Side view of the car with part locations">
-            <defs>
-              <marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-                <path d="M0 0L10 5L0 10z" fill="var(--mk)"/>
-              </marker>
-            </defs>
-            <path class="body" d="M30 178L30 152Q32 136 70 130L178 112L214 82Q232 68 268 68L392 68Q432 70 452 100L536 120Q568 128 570 152L570 178Z"/>
-            <path class="win" d="M222 88L262 76L318 76L318 110L202 110Z"/>
-            <path class="win" d="M326 76L392 76Q420 80 436 108L326 110Z"/>
-            <circle class="wh"  cx="150" cy="182" r="34"/>
-            <circle class="hub" cx="150" cy="182" r="14"/>
-            <circle class="wh"  cx="450" cy="182" r="34"/>
-            <circle class="hub" cx="450" cy="182" r="14"/>
-            ${hotspots}
-          </svg>
-        </div>
-
+        <p class="mut">${parts.length} parts available. Select a numbered pin or a part below.</p>
+        ${diagram}
         <h2>All parts for this car</h2>
         ${parts.map((p, i) => row(p, i + 1)).join('')
           || '<p class="mut">No parts yet. Be the first to upload one from your profile.</p>'}`);
@@ -1109,7 +1132,23 @@ const thumb = (p, n) => p.img
           </select>
           <button class="ghost" onclick="delP('${p.id}')">Delete</button>
         </div>`).join('');
-
+      const partCards = P.map(p => `
+        <div class="card">
+          <div><b>${esc(p.name)}</b> <span class="mut">by ${esc(p.au)}</span></div>
+          <div class="sf">
+            <select onchange="setSt(${p.id}, this.value)" aria-label="Status">
+              ${Object.keys(ST).map(s => `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
+            </select>
+            <button class="ghost" onclick="delP(${p.id})">Delete</button>
+          </div>
+          <form class="aform" onsubmit="return editP(event, ${p.id})">
+            <label>Printed price (€)<input name="price" type="number" step="0.01" min="0" placeholder="e.g. 4.50" value="${p.price || ''}"></label>
+            <label>Picture URL<input name="img" placeholder="https://..." value="${esc(p.img)}"></label>
+            <label>OEM number<input name="oem" placeholder="optional" value="${esc(p.oem)}"></label>
+            <label><span>Sold as printed part</span><input name="phys" type="checkbox" style="width:auto"${p.k != 'print' ? ' checked' : ''}></label>
+            <button>Save details</button>
+          </form>
+        </div>`).join('');
       view(`
         <h1>Admin</h1>
 
@@ -1127,7 +1166,10 @@ const thumb = (p, n) => p.img
             <h3>New model</h3>
             <label>Brand<select name="b">${brandOpts}</select></label>
             <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
-            <label>Picture URL (optional)<input name="pic" placeholder="https://..."></label>
+            <label>Model picture (optional)
+              <input name="pic" data-url placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
             <button>Add model</button>
           </form>
 
@@ -1137,16 +1179,28 @@ const thumb = (p, n) => p.img
             <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
             <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
             <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
-            <label>Overview image URL (optional)<input name="img" placeholder="https://..."></label>
+            <label>Generation photo (optional)
+              <input name="img" data-url placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
             <button>Add generation</button>
           </form>
         </div>
 
         <h2>Parts</h2>
-        ${partRows || '<p class="mut">No parts yet.</p>'}`);
+        ${partCards || '<p class="mut">No parts yet.</p>'}`);
     }
     
-    
+    async function adminPic(inp) {
+      const f = inp.files[0];
+      if (!f) return;
+      try {
+        toast('Uploading…');
+        const u = await uploadRaw('image', f);
+        inp.closest('label').querySelector('[data-url]').value = u.url;
+        toast('Picture uploaded. Now save the form.');
+      } catch (e) { toast(e.message); }
+    }
     /* =====================================================
        Routing & startup
        ===================================================== */
