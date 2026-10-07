@@ -698,7 +698,7 @@ const thumb = (p, n) => p.img
     ===================================================== */
     function nav() {
       $('#nav').innerHTML =
-            `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+        `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
         + (me
@@ -2008,7 +2008,7 @@ const thumb = (p, n) => p.img
       return html;
     }
 
-    
+
     function admin() {
       if (!isAdmin) return home();
       const brandFilter = '<option value="">Any brand</option>'
