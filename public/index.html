@@ -3,60 +3,33 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>ReFit – parts for cars the manufacturer forgot</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap">
+  <title>ReClip – parts for cars the manufacturer forgot</title>
+  <meta name="theme-color" content="#152D23">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23B6E2D3'/%3E%3Cpath d='M10 22V11a6 6 0 0 1 12 0v8a3 3 0 0 1-6 0v-7' fill='none' stroke='%23152D23' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
   <style>
+    
     /* ---------- Theme variables ---------- */
     :root {
       box-sizing: border-box;
       padding-top: env(safe-area-inset-top, 0px);
       padding-bottom: env(safe-area-inset-bottom, 0px);
 
-      --bg: #eef1f0;
-      --card: #fff;
-      --ink: #16222a;
-      --mut: #58656d;
-      --acc: #0b6e6e;
-      --on: #fff;
-      --line: #d3dadc;
+      --bg: #5D7772;      /* page background */
+      --card: #EAF5F0;    /* cards, inputs: light tint of the accent */
+      --soft: #D5ECE3;    /* image backgrounds */
+      --ink: #152D23;     /* text */
+      --mut: #3C5A4D;     /* muted text on cards */
+      --onbg: #F2FAF7;    /* small text directly on the page background */
+      --acc: #B6E2D3;     /* accent */
+      --on: #152D23;      /* text on accent buttons */
+      --line: #6E8B80;
       --ok: #1f7a45;
-      --mk: #d9480f;
-      --car: #c3ccd2;
-      --win: #e9f0f4;
+      --mk: #d9480f;      /* pin and marker colour */
+      --car: #8DB3A5;
+      --win: #D5ECE3;
     }
 
     html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-
-
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: #101619;
-        --card: #182025;
-        --ink: #e6ecef;
-        --mut: #9aa8b0;
-        --acc: #3fc1b0;
-        --on: #06201c;
-        --line: #2c373d;
-        --ok: #5cc58a;
-        --mk: #ff8a4c;
-        --car: #46535b;
-        --win: #26323a;
-      }
-    }
-
-    :root[data-theme="dark"] {
-      --bg: #101619;
-      --card: #182025;
-      --ink: #e6ecef;
-      --mut: #9aa8b0;
-      --acc: #3fc1b0;
-      --on: #06201c;
-      --line: #2c373d;
-      --ok: #5cc58a;
-      --mk: #ff8a4c;
-      --car: #46535b;
-      --win: #26323a;
-    }
 
     /* ---------- Base ---------- */
     * { box-sizing: border-box; }
@@ -574,6 +547,40 @@
     .danger { background: #c0392b; color: #fff; }
     .imptbl { width: 100%; border-collapse: collapse; font-size: 14px; }
     .imptbl th, .imptbl td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+    /* ---------- ReClip theme overrides-----------------
+    -------------------
+    ---------- 
+    -------------------------------------------------------*/
+
+    a { color: var(--ink); }
+    p a, li a, main > a { text-decoration: underline; text-underline-offset: 2px; }
+    :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    header :focus-visible { outline-color: var(--acc); }
+
+    /* Small text sitting directly on the page background (delete this rule to use #152D23 everywhere) */
+    main > p, main > .mut, .hero p { color: var(--onbg); }
+
+    /* Header */
+    header { background: var(--ink); border-bottom-color: var(--ink); }
+    header .logo { color: var(--acc); }
+    .logo svg { width: 30px; height: 30px; flex: none; }
+    .logo svg rect { fill: var(--acc); }
+    .logo svg path { stroke: var(--ink); }
+    header #nav a:not(.btn) { color: var(--acc); }
+    header .btn { border: 1px solid var(--acc); }
+    header .btn.ghost { color: var(--acc); background: transparent; }
+
+    /* Buttons and controls */
+    button, .btn { border: 1px solid var(--ink); }
+    .ghost { border-color: var(--ink); }
+    .alt { background: var(--ink); color: var(--acc); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #toast { color: var(--acc); }
+    .techbtn input:checked + span { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+    .av { border: 2px solid var(--ink); }
+
+    /* Image areas */
+    .pimg, .carcard img, .carcard .noimg, .th.big img { background: var(--soft); }
   </style>
 </head>
 
