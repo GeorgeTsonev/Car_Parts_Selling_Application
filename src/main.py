@@ -656,11 +656,17 @@ def car_label(brand, model, gen, yr):
     return " ".join(x for x in (brand, model, gen, f"({yr})") if x)
 
 async def run_batch(env, stmts):
-    from js import Array
-    batch = Array.new()
+    try:
+        from js import Array
+        batch = Array.new()
+        for sql, args in stmts:
+            batch.push(env.DB.prepare(sql).bind(*args))
+        await env.DB.batch(batch)
+        return
+    except Exception as e:
+        print("D1 batch failed, writing one statement at a time:", e)
     for sql, args in stmts:
-        batch.push(env.DB.prepare(sql).bind(*args))
-    await env.DB.batch(batch)
+        await run(env, sql, *args)
 
 async def load_cat(env):
     cat = {"b": {}, "m": {}, "g": {}, "label": {}}
@@ -701,8 +707,8 @@ def plan_vehicles(cat, brands, errors, stmts, n):
         if bk not in cat["b"]:
             cat["b"][bk] = bname
             n["brands"] += 1
-            stmts.append(("INSERT INTO Brands(name, logo_url) VALUES(?, NULLIF(?, ''))",
-                          (bname, _s(b.get("logo_url"), 500))))
+            stmts.append(("INSERT OR IGNORE INTO Brands(name, logo_url) VALUES(?, NULLIF(?, ''))",
+              (bname, _s(b.get("logo_url"), 500))))
         else:
             n["skipped"] += 1
         bcanon = cat["b"][bk]
@@ -721,8 +727,10 @@ def plan_vehicles(cat, brands, errors, stmts, n):
                 cat["m"][(bk, mk)] = mname
                 n["models"] += 1
                 stmts.append(("INSERT INTO Models(brand_id, name, picture_url) "
-                              "SELECT brand_id, ?, NULLIF(?, '') FROM Brands WHERE name = ? LIMIT 1",
-                              (mname, _s(m.get("picture_url"), 500), bcanon)))
+                    "SELECT b.brand_id, ?, NULLIF(?, '') FROM Brands b "
+                    "WHERE b.name = ? AND NOT EXISTS (SELECT 1 FROM Models m "
+                    "WHERE m.brand_id = b.brand_id AND m.name = ?) LIMIT 1",
+                    (mname, _s(m.get("picture_url"), 500), bcanon, mname)))
             else:
                 n["skipped"] += 1
             mcanon = cat["m"][(bk, mk)]
@@ -748,11 +756,13 @@ def plan_vehicles(cat, brands, errors, stmts, n):
                     cat["g"][key] = gname
                     n["generations"] += 1
                     stmts.append(("INSERT INTO Vehicle_Generations(model_id, generation_name, start_year, "
-                                  "end_year, overview_image_url) "
-                                  "SELECT m.model_id, ?, ?, NULLIF(?, 0), NULLIF(?, '') FROM Models m "
-                                  "JOIN Brands b ON b.brand_id = m.brand_id "
-                                  "WHERE b.name = ? AND m.name = ? LIMIT 1",
-                                  (gname, start, end, _s(g.get("photo_url"), 500), bcanon, mcanon)))
+                        "end_year, overview_image_url) "
+                        "SELECT m.model_id, ?, ?, NULLIF(?, 0), NULLIF(?, '') FROM Models m "
+                        "JOIN Brands b ON b.brand_id = m.brand_id "
+                        "WHERE b.name = ? AND m.name = ? AND NOT EXISTS (SELECT 1 FROM Vehicle_Generations g "
+                        "WHERE g.model_id = m.model_id AND COALESCE(g.generation_name, '') = ? "
+                        "AND g.start_year = ?) LIMIT 1",
+                        (gname, start, end, _s(g.get("photo_url"), 500), bcanon, mcanon, gname, start)))
                 else:
                     n["skipped"] += 1
 
@@ -916,8 +926,8 @@ async def admin_import(data: ImportIn, request: Request):
         except Exception as e:
             import traceback
             print(traceback.format_exc())
-            raise HTTPException(500, "The import could not be saved, so nothing was changed. "
-                             f"Details: {e}")
+            raise HTTPException(500, "The import stopped with an error. Records saved before the error are "
+                                     f"kept, and it is safe to run the same file again. Details: {e}")
     return {"ok": ok, "dry_run": data.dry_run, "applied": applied, "counts": n,
             "errors": errors[:50], "error_total": len(errors), "missing": missing_out}
 # ---------- End JSON import ----------

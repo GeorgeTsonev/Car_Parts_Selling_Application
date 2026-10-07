@@ -27,7 +27,7 @@
 
     html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 
-    
+
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         --bg: #101619;
@@ -1890,7 +1890,7 @@ const thumb = (p, n) => p.img
     };
     /* ===== JSON import (admin) ===== */
     let IMP = { open: false, data: null, html: '', ok: false, seen: {}, adds: {} };
-    const IMP_CHUNK = 300, IMP_PARTS_MAX = 100;
+    const IMP_CHUNK = 50, IMP_PARTS_MAX = 100;
     const carKey = c => [c.brand, c.model, c.generation || '', c.start_year].join('|').toLowerCase();
 
     const IMP_TEMPLATES = {
