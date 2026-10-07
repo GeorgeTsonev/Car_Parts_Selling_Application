@@ -283,6 +283,7 @@ class PartIn(BaseModel):
     license: str
     generation_id: int
     file_key: str
+    oem_part_number: str = ""
     image_key: str = ""
     steps: str = ""
     technique: str
@@ -386,11 +387,11 @@ async def create_part(data: PartIn, request: Request):
     supports = 1 if specs.get("supports") == "Yes" else 0
 
     rows = await q(env,
-        "INSERT INTO Parts(sku, name, description, category, disassembly_instructions, "
+        "INSERT INTO Parts(sku, name, description, oem_part_number, category, disassembly_instructions, "
         "author_user_id, license, image_url, manufacturing_technique, material, "
         "manufacturing_specs, status) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'draft') RETURNING part_id",
-        "U-" + secrets.token_hex(6), name, desc, data.category, steps, uid,
+        "VALUES(?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'draft') RETURNING part_id",
+        "U-" + secrets.token_hex(6), name, desc, data.oem_part_number.strip(), data.category, steps, uid,
         data.license, image_url, data.technique, material, json.dumps(specs))
     pid = rows[0]["part_id"]
 

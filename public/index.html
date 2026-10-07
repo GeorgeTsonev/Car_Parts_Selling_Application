@@ -62,6 +62,10 @@
 
     body {
       margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
       background: var(--bg);
       color: var(--ink);
       font: 16px/1.55 Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -75,9 +79,29 @@
     }
 
     main {
+      flex: 1;
+      width: 100%;
       max-width: 940px;
       margin: 0 auto;
       padding: 20px;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      background: var(--card);
+      color: var(--mut);
+      font-size: 14px;
+    }
+
+    .footer-content {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     h1 {
@@ -389,6 +413,43 @@
       align-items: center;
     }
 
+    .profile-forms {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+      gap: 20px;
+      align-items: start;
+      margin: 14px 0;
+    }
+
+    .profile-forms > .card {
+      min-width: 0;
+      margin: 0;
+      grid-template-columns: minmax(0, 1fr);
+      align-content: start;
+    }
+
+    .profile-forms label,
+    .profile-forms fieldset {
+      min-width: 0;
+    }
+
+    .profile-forms input,
+    .profile-forms select,
+    .profile-forms textarea {
+      max-width: 100%;
+    }
+
+    .profile-about textarea {
+      resize: vertical;
+      min-height: 100px;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    @media (max-width: 800px) {
+      .profile-forms { grid-template-columns: minmax(0, 1fr); }
+    }
+
     /* ---------- Toast & utilities ---------- */
     #toast {
       position: fixed;
@@ -520,6 +581,12 @@
   </header>
 
   <main id="app"></main>
+  <footer>
+    <div class="footer-content">
+      <span>&copy; <span id="copyright-year">2026</span> ReFit</span>
+      <a href="#/faq">FAQ</a>
+    </div>
+  </footer>
   <div id="toast" role="status"></div>
 
   <script>
@@ -697,7 +764,6 @@ const thumb = (p, n) => p.img
     function nav() {
       $('#nav').innerHTML =
             `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
-        `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
         + (me
           ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
@@ -1373,7 +1439,8 @@ const thumb = (p, n) => p.img
           </div>
         </div>
 
-        <form class="card" onsubmit="return save(event)">
+        <div class="profile-forms">
+        <form class="card profile-about" onsubmit="return save(event)">
           <h2>About you</h2>
           <label>Short bio<textarea name="bio" rows="3">${esc(me.bio)}</textarea></label>
           <label>Contact (phone, forum, social)<input name="phone" value="${esc(me.phone)}"></label>
@@ -1395,6 +1462,7 @@ const thumb = (p, n) => p.img
             <div id="techfields" class="filters"></div>
           </fieldset>
           <label>Part name<input name="name" required></label>
+          <label>OEM number (optional)<input name="oem" type="text" placeholder="e.g. 1J0 867 299"></label>
           <label>Description<textarea name="d" rows="2" required></textarea></label>
           <label>Fits<select name="g">${genOptions}</select></label>
           <label>Category<select name="cat">${catOptions}</select></label>
@@ -1410,6 +1478,7 @@ const thumb = (p, n) => p.img
           </label>
           <button>Publish as draft</button>
         </form>
+        </div>
 
         <h2>My creations</h2>
         ${mine.map(p => row(p)).join('')
@@ -1468,6 +1537,7 @@ const thumb = (p, n) => p.img
         const imageKey = img && img.size ? (await uploadRaw('image', img)).key : '';
         await api('POST', '/api/parts', {
           name: f.get('name'), description: f.get('d'), category: f.get('cat'),
+          oem_part_number: (f.get('oem') || '').trim(),
           license: f.get('lic'), generation_id: +f.get('g'),
           file_key: fileKey, image_key: imageKey, steps: f.get('steps') || '',
           technique: f.get('tech'), specs
@@ -1889,6 +1959,31 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Routing & startup
        ===================================================== */
+    function faq() {
+      view(`
+        <h1>Frequently asked questions</h1>
+        <section class="card">
+          <h2>What is ReFit?</h2>
+          <p>ReFit helps you find replacement parts for older cars. Browse by car or search by part name or OEM number. Parts may have a downloadable 3D file, a printed version to buy, or both.</p>
+        </section>
+        <section class="card">
+          <h2>How do I share a part?</h2>
+          <p>Create an account or log in, then open your <a href="#/profile">profile</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and car fitment, and upload an STL, 3MF or STEP file. Your part is published as a draft.</p>
+        </section>
+        <section class="card">
+          <h2>Do I need an OEM number?</h2>
+          <p>No. The OEM number is optional. If you know the original manufacturer's part number, include it to help people find your part. Otherwise, leave the field blank.</p>
+        </section>
+        <section class="card">
+          <h2>How do I find parts for my car?</h2>
+          <p>Choose a brand and model on the home page, or use the brand, model and generation filters on the <a href="#/parts">all parts page</a>. Each part's details list the cars it fits.</p>
+        </section>
+        <section class="card">
+          <h2>Where can I see printing instructions and the license?</h2>
+          <p>Open a part's page to see its manufacturing details, removal steps and license. The available details depend on what the author has provided.</p>
+        </section>`);
+    }
+
     let PF = { b: '', m: '', g: '' };   // brand, model, generation filters
 
     function partsPage() {
@@ -1956,12 +2051,14 @@ const thumb = (p, n) => p.img
         profile: profile,
         cart:    cartv,
         parts:   partsPage,
+        faq:     faq,
         admin:   admin
       };
       (routes[page] || home)();
     }
 
   async function init() {
+    $('#copyright-year').textContent = new Date().getFullYear();
     addEventListener('hashchange', route);
     nav();
     view('<p class="mut">Loading catalog…</p>');
