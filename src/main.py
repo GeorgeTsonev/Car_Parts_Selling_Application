@@ -2,19 +2,14 @@ from workers import WorkerEntrypoint
 from fastapi import FastAPI, Request
 import asgi
 import base64, hashlib, hmac, secrets
-from js import crypto, TextEncoder, Uint8Array, Object, JSON
+from js import crypto, TextEncoder, Uint8Array, Object
 from pyodide.ffi import to_js
 from fastapi import HTTPException, Response
 from pydantic import BaseModel
 import json
 app = FastAPI()
 
-async def qjson(env, sql, *args):
-    stmt = env.DB.prepare(sql)
-    if args:
-        stmt = stmt.bind(*args)
-    res = await stmt.all()
-    return JSON.stringify(res.results)
+
 async def q(env, sql, *args):
     stmt = env.DB.prepare(sql)
     if args:
@@ -55,25 +50,21 @@ from fastapi.responses import PlainTextResponse
 async def catalog(request: Request):
     try:
         env = request.scope["env"]
-        base = str(env.PUBLIC_R2_URL).rstrip("/") + "/"
-        sections = [
-            ("brands", await qjson(env, "SELECT brand_id, name, logo_url FROM Brands ORDER BY name")),
-            ("models", await qjson(env, "SELECT model_id, brand_id, name, description, picture_url FROM Models")),
-            ("generations", await qjson(env, "SELECT generation_id, model_id, generation_name, start_year, end_year, overview_image_url FROM Vehicle_Generations")),
-            ("parts", await qjson(env, """
+        return {
+            "brands": await q(env, "SELECT brand_id, name, logo_url FROM Brands ORDER BY name"),
+            "models": await q(env, "SELECT model_id, brand_id, name, description, picture_url FROM Models"),
+            "generations": await q(env, "SELECT generation_id, model_id, generation_name, start_year, end_year, overview_image_url FROM Vehicle_Generations"),
+            "parts": await q(env, """
                 SELECT p.part_id, p.created_at, p.name, p.description, p.oem_part_number, p.category,
-                p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
-                p.is_available_physical, p.physical_print_price, p.status,
-                p.author_user_id, u.username AS author, p.manufacturing_technique,
-                p.material, p.manufacturing_specs
-                FROM Parts p JOIN Users u ON u.user_id = p.author_user_id""")),
-            ("compat", await qjson(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities")),
-            ("files", await qjson(env, "SELECT file_id, part_id, file_type, file_name, ? || r2_object_key AS url, "
-                                       "recommended_material, recommended_infill_pct, supports_required FROM Part_Files", base)),
-        ]
-        body = ("{" + ",".join(f'"{k}":{v}' for k, v in sections)
-                + ',"spec_schema":' + json.dumps(SPEC_SCHEMA) + "}")
-        return Response(content=body, media_type="application/json")
+                       p.disassembly_instructions, p.image_url, p.license, p.is_assembly,
+                       p.is_available_physical, p.physical_print_price, p.status,
+                       p.author_user_id, u.username AS author, p.manufacturing_technique,
+                       p.material, p.manufacturing_specs
+                FROM Parts p JOIN Users u ON u.user_id = p.author_user_id"""),
+            "compat": await q(env, "SELECT part_id, generation_id, hotspot_x, hotspot_y FROM Part_Compatibilities"),
+            "files": await public_files(env),
+            "spec_schema": SPEC_SCHEMA,
+        }
     except Exception:
         return PlainTextResponse(traceback.format_exc(), status_code=500)
 

@@ -2043,12 +2043,12 @@ const thumb = (p, n) => p.img
         }
       } catch (e) {
         impOut(`<p class="err">${esc(e.message)}${esc(done ? ' ' + done + ' parts of the file were imported before this error. Run the same file again to continue.' : '')}</p>`);
-        if (done) await load().catch(() => toast('Imported, but the catalog could not reload. Refresh the page.'));
+        if (done) await load();
         return;
       }
       if (!dry) {
         IMP.ok = false;
-        await load().catch(() => toast('Imported, but the catalog could not reload. Refresh the page.'));
+        await load();
         impOut(`<p><b>Import finished.</b> ${esc(impSummary(d, total))}</p>`);
         admin();
         return;
