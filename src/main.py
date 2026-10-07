@@ -655,8 +655,11 @@ def car_label(brand, model, gen, yr):
     return " ".join(x for x in (brand, model, gen, f"({yr})") if x)
 
 async def run_batch(env, stmts):
-    prepared = [env.DB.prepare(sql).bind(*args) for sql, args in stmts]
-    await env.DB.batch(to_js(prepared))
+    from js import Array
+    batch = Array.new()
+    for sql, args in stmts:
+        batch.push(env.DB.prepare(sql).bind(*args))
+    await env.DB.batch(batch)
 
 async def load_cat(env):
     cat = {"b": {}, "m": {}, "g": {}, "label": {}}
@@ -909,9 +912,11 @@ async def admin_import(data: ImportIn, request: Request):
         try:
             await run_batch(env, stmts)
             applied = True
-        except Exception:
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
             raise HTTPException(500, "The import could not be saved, so nothing was changed. "
-                                     "Check the file and try again.")
+                             f"Details: {e}")
     return {"ok": ok, "dry_run": data.dry_run, "applied": applied, "counts": n,
             "errors": errors[:50], "error_total": len(errors), "missing": missing_out}
 # ---------- End JSON import ----------
