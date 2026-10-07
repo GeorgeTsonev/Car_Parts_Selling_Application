@@ -510,6 +510,8 @@
     details.card > summary { cursor: pointer; font-weight: 800; font-size: 22px; }
     .seg { display: flex; gap: 8px; flex-wrap: wrap; }
     .danger { background: #c0392b; color: #fff; }
+    .imptbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .imptbl th, .imptbl td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
   </style>
 </head>
 
@@ -1815,6 +1817,197 @@ const thumb = (p, n) => p.img
       ADM.sel.gen = '';
       adminDo(() => api('DELETE', '/api/admin/generations/' + id), 'Generation deleted. Parts were kept.');
     };
+    /* ===== JSON import (admin) ===== */
+    let IMP = { open: false, data: null, html: '', ok: false, seen: {}, adds: {} };
+    const IMP_CHUNK = 300, IMP_PARTS_MAX = 100;
+    const carKey = c => [c.brand, c.model, c.generation || '', c.start_year].join('|').toLowerCase();
+
+    const IMP_TEMPLATES = {
+      vehicles: {
+        type: 'vehicles', format_version: 1,
+        brands: [
+          { name: 'Volkswagen', logo_url: '',
+            models: [
+              { name: 'Golf', picture_url: '',
+                generations: [
+                  { name: 'Mk4', start_year: 1997, end_year: 2003, photo_url: '' },
+                  { name: 'Mk5', start_year: 2003, end_year: 2008 }
+                ] }
+            ] },
+          { name: 'Seat', models: [ { name: 'Ibiza', generations: [ { start_year: 2002, end_year: 2008 } ] } ] }
+        ]
+      },
+      parts: {
+        type: 'parts', format_version: 1,
+        parts: [
+          { sku: 'GOLF4-CLIP-001', name: 'Door-card clip set', description: 'Replacement clips for the door card.',
+            category: 'trim_clip', license: 'CC-BY-SA-4.0', oem_part_number: '', image_url: '',
+            removal_steps: 'Step one\nStep two', status: 'draft', author: 'username',
+            technique: 'FDM', specs: { material: 'PETG', infill_pct: 40 },
+            printed_price: 6.5,
+            fits: [ { brand: 'Volkswagen', model: 'Golf', generation: 'Mk4', start_year: 1997, x: 42.5, y: 61 } ] }
+        ]
+      }
+    };
+
+    function impTemplate(type) {
+      const blob = new Blob([JSON.stringify(IMP_TEMPLATES[type], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = type + '-template.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function impSection() {
+      return `<details class="card" id="adm-imp"${IMP.open ? ' open' : ''} ontoggle="IMP.open = this.open">
+        <summary>Import from JSON</summary>
+        <p class="mut">Use a <b>vehicles</b> file (brands, models, generations) or a <b>parts</b> file (up to ${IMP_PARTS_MAX} parts).
+          Import vehicles first. Records that already exist are skipped, and nothing is ever deleted.</p>
+        <div class="seg">
+          <button type="button" class="ghost" onclick="impTemplate('vehicles')">Download vehicles template</button>
+          <button type="button" class="ghost" onclick="impTemplate('parts')">Download parts template</button>
+        </div>
+        <label>JSON file<input type="file" accept=".json,application/json" onchange="impPick(this)"></label>
+        <div id="imp-out">${IMP.html}</div>
+      </details>`;
+    }
+
+    function impOut(html) {
+      IMP.html = html;
+      const el = $('#imp-out');
+      if (el) el.innerHTML = html;
+    }
+
+    function impChunks(brands) {
+      const chunks = [];
+      let cur = [], size = 0, nb = null;
+      const flush = () => { if (cur.length) chunks.push(cur); cur = []; size = 0; };
+      for (const b of brands) {
+        const start = () => { nb = { ...b, models: [] }; cur.push(nb); size += 1; };
+        start();
+        for (const m of (b.models || [])) {
+          const cost = 1 + ((m && m.generations) || []).length;
+          if (size + cost > IMP_CHUNK && size > 0) { flush(); start(); }
+          nb.models.push(m);
+          size += cost;
+        }
+      }
+      flush();
+      return chunks;
+    }
+
+    async function impPick(input) {
+      const f = input.files[0];
+      if (!f) return;
+      IMP.seen = {}; IMP.adds = {}; IMP.ok = false; IMP.data = null;
+      try {
+        const d = JSON.parse(await f.text());
+        if (d.type === 'vehicles') {
+          if (!Array.isArray(d.brands)) throw new Error('A vehicles file needs a "brands" list.');
+        } else if (d.type === 'parts') {
+          if (!Array.isArray(d.parts)) throw new Error('A parts file needs a "parts" list.');
+          if (d.parts.length > IMP_PARTS_MAX)
+            throw new Error(`This file has ${d.parts.length} parts. The limit is ${IMP_PARTS_MAX} per file. Split it into several files.`);
+        } else {
+          throw new Error('The file must contain "type": "vehicles" or "type": "parts".');
+        }
+        IMP.data = d;
+      } catch (e) {
+        const msg = e instanceof SyntaxError ? 'This is not valid JSON: ' + e.message : e.message;
+        impOut(`<p class="err">${esc(msg)}</p>`);
+        return;
+      }
+      impRun(true);
+    }
+
+    function impApproved() {
+      return Object.values(IMP.adds).map(c =>
+        ({ brand: c.brand, model: c.model, generation: c.generation || '', start_year: c.start_year }));
+    }
+
+    function impToggle(i) {
+      const key = Object.keys(IMP.seen)[i];
+      if (IMP.adds[key]) delete IMP.adds[key]; else IMP.adds[key] = IMP.seen[key];
+      impRun(true);
+    }
+
+    async function impRun(dry) {
+      const d = IMP.data;
+      if (!d) return;
+      const total = { brands: 0, models: 0, generations: 0, parts: 0, fits: 0, skipped: 0 };
+      const errors = [];
+      let errTotal = 0, done = 0;
+      const jobs = d.type === 'vehicles'
+        ? impChunks(d.brands).map(c => ({ brands: c }))
+        : [{ parts: d.parts, add_cars: impApproved() }];
+      try {
+        for (let i = 0; i < jobs.length; i++) {
+          impOut(`<p class="mut">${dry ? 'Checking' : 'Importing'} part ${i + 1} of ${jobs.length}…</p>`);
+          const r = await api('POST', '/api/admin/import', { type: d.type, dry_run: dry, ...jobs[i] });
+          for (const k in total) total[k] += (r.counts && r.counts[k]) || 0;
+          errors.push(...r.errors);
+          errTotal += r.error_total;
+          for (const m of r.missing) IMP.seen[carKey(m)] = m;
+          if (!dry && !r.ok) break;
+          if (!dry) done++;
+        }
+      } catch (e) {
+        const note = !dry && done ? ` ${done} of ${jobs.length} parts of the file were already imported. Run the same file again to continue.` : '';
+        impOut(`<p class="err">${esc(e.message)}${esc(note)}</p>`);
+        if (done) { await load(); }
+        return;
+      }
+      if (!dry) {
+        IMP.ok = false;
+        await load();
+        impOut(`<p><b>Import finished.</b> ${esc(impSummary(d, total))}</p>`);
+        admin();
+        return;
+      }
+      const pending = Object.keys(IMP.seen).some(k => !IMP.adds[k]);
+      const work = total.brands + total.models + total.generations + total.parts;
+      IMP.ok = !errTotal && !pending && work > 0;
+      impOut(impCheckHtml(d, total, errors, errTotal, pending, work));
+    }
+
+    function impSummary(d, t) {
+      const bits = [];
+      if (t.brands) bits.push(t.brands + ' new brands');
+      if (t.models) bits.push(t.models + ' new models');
+      if (t.generations) bits.push(t.generations + ' new generations');
+      if (t.parts) bits.push(t.parts + ' new parts with ' + t.fits + ' car fitments');
+      if (t.skipped) bits.push(t.skipped + ' already existed and were skipped');
+      return bits.join(', ') || 'Nothing new.';
+    }
+
+    function impCheckHtml(d, total, errors, errTotal, pending, work) {
+      let html = `<p><b>${d.type === 'vehicles' ? 'Vehicles' : 'Parts'} file checked.</b> ${esc(impSummary(d, total))}`
+        + (d.type === 'vehicles' ? ' <span class="mut">(counts are approximate for large files)</span>' : '') + '</p>';
+      if (errTotal) {
+        html += `<p class="err">${errTotal} problem${errTotal === 1 ? '' : 's'} to fix in the file`
+          + (errTotal > errors.length ? ` (showing the first ${errors.length})` : '') + ':</p><ul>'
+          + errors.map(e => `<li>${esc(e)}</li>`).join('') + '</ul>';
+      }
+      const seen = Object.entries(IMP.seen);
+      if (seen.length) {
+        html += `<p><b>Cars not found in the database.</b> If a name is a typo, fix the file and choose it again.
+          Otherwise tick the cars you want to add. They are created without photos and you can edit them later.</p>
+          <table class="imptbl"><tr><th>Car in file</th><th>Used by parts</th><th>Closest existing car</th><th></th></tr>`
+          + seen.map(([k, c], i) => `<tr>
+            <td>${esc(c.brand + ' ' + c.model + ' ' + (c.generation || '') + ' (' + c.start_year + ')')}</td>
+            <td>${esc(c.parts.join(', '))}</td>
+            <td>${c.suggestion ? esc(c.suggestion) : '<span class="mut">none</span>'}</td>
+            <td><label style="display:flex;gap:6px;align-items:center">
+              <input type="checkbox" style="width:auto" ${IMP.adds[k] ? 'checked' : ''} onchange="impToggle(${i})"> Add this car</label></td>
+          </tr>`).join('') + '</table>';
+      }
+      if (!work && !errTotal && !pending) html += '<p class="mut">Nothing new to import.</p>';
+      html += `<button ${IMP.ok ? '' : 'disabled'} onclick="impRun(false)">Import</button>`
+        + (IMP.ok ? '' : ' <span class="mut">Fix the problems above to enable the import.</span>');
+      return html;
+    }
+
     function admin() {
       if (!isAdmin) return home();
       const brandFilter = '<option value="">Any brand</option>'
@@ -1827,7 +2020,7 @@ const thumb = (p, n) => p.img
         ${admDetails('brand', 'Brands')}
         ${admDetails('model', 'Models')}
         ${admDetails('gen', 'Generations')}
-
+        ${impSection()}
         <h2>Find parts</h2>
         <form id="af" class="card filters" oninput="adminFilter(event)" onsubmit="return false">
           <label>Name<input name="name" value="${esc(AF.name)}" placeholder="part name"></label>
