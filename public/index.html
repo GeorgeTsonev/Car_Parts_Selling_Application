@@ -1747,7 +1747,6 @@ const thumb = (p, n) => p.img
     };
     function admin() {
       if (!isAdmin) return home();
-        `<option value="${m.model_id}">${esc((B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name)}</option>`).join('');
       const brandFilter = '<option value="">Any brand</option>'
         + B.map(b => `<option value="${b.id}"${b.id == AF.brand ? ' selected' : ''}>${esc(b.n)}</option>`).join('');
       const sel = (key, val) => (AF[key] === val ? ' selected' : '');
