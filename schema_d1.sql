@@ -57,7 +57,7 @@ CREATE TABLE Parts (
   created_at TEXT DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
   manufacturing_technique TEXT CHECK (manufacturing_technique IN ('FDM','SLS','SLA','CNC')),
-  material TEXT CHECK (material IN ('PLA','PETG','ABS','ASA','PA_CF','TPU')),
+  material TEXT,
   manufacturing_specs TEXT
 );
 
