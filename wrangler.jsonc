@@ -18,5 +18,21 @@
   "r2_buckets": [
   { "binding": "BUCKET", "bucket_name": "carparts" }
     ],
-    "vars": { "PUBLIC_R2_URL": "https://pub-1e0b26c9ce9a4151b9c6a7dbd2b5eb3d.r2.dev" }
+    "vars": { "PUBLIC_R2_URL": "https://pub-1e0b26c9ce9a4151b9c6a7dbd2b5eb3d.r2.dev" },
+    "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true
+    },
+    "issue_detection": {
+      "enabled": true
+    }
+  },
 }
