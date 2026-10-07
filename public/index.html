@@ -249,7 +249,7 @@
       color: var(--mut);
     }
     /* ---------- Part cards (car page) ---------- */
-    main:has(.pgrid) { max-width: 1060px; }
+    main:has(.pgrid, #pf-list) { max-width: 1060px; }
     main:has(.pgrid) .car { max-width: 600px; margin-left: auto; margin-right: auto; }
     .pgrid {
       display: grid;
@@ -691,17 +691,18 @@ async function load() {
 const thumb = (p, n) => p.img
   ? `<img src="${esc(p.img)}" alt="${esc(p.name)}" loading="lazy">${n ? `<b class="nb">${n}</b>` : ''}`
   : (n || CAT[p.cat]);
-    /* =====================================================
-       Shared UI fragments
-       ===================================================== */
+/* =====================================================
+   Shared UI fragments
+    ===================================================== */
     function nav() {
-  $('#nav').innerHTML =
-    `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
-    + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
-    + (me
-      ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
-      : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
-  }
+      $('#nav').innerHTML =
+            `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+        `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+        + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
+        + (me
+          ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
+          : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
+      }
 
     function tags(p) {
       return (p.tech ? `<span class="tag">${esc(p.tech)}</span>` : '')
@@ -1888,6 +1889,58 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Routing & startup
        ===================================================== */
+    let PF = { b: '', m: '', g: '' };   // brand, model, generation filters
+
+    function partsPage() {
+      view(`
+        <h1>All parts</h1>
+        <p class="mut">Browse every part on the site, or narrow the list to your car.</p>
+        <div class="card filters">
+          <label>Brand<select id="pf-b" onchange="partsFilter('b', this.value)"></select></label>
+          <label>Model<select id="pf-m" onchange="partsFilter('m', this.value)"></select></label>
+          <label>Generation<select id="pf-g" onchange="partsFilter('g', this.value)"></select></label>
+          <button type="button" class="ghost" onclick="partsReset()">Reset</button>
+        </div>
+        <p class="mut" id="pf-count"></p>
+        <div id="pf-list"></div>`);
+      partsRender();
+    }
+
+    function partsFilter(field, val) {
+      PF[field] = val;
+      if (field === 'b') { PF.m = ''; PF.g = ''; }
+      if (field === 'm') { PF.g = ''; }
+      partsRender();
+    }
+
+    function partsReset() { PF = { b: '', m: '', g: '' }; partsRender(); }
+
+    function partsRender() {
+      if (!$('#pf-list')) return;
+      const o = (v, label, cur) =>
+        `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+
+      const models = M.filter(m => !PF.b || m.brand_id == PF.b);
+      const gens = G.filter(g => (!PF.b || g.b == PF.b) && (!PF.m || g.mid == PF.m));
+
+      $('#pf-b').innerHTML = '<option value="">Any brand</option>' + B.map(b => o(b.id, b.n, PF.b)).join('');
+      $('#pf-m').innerHTML = '<option value="">Any model</option>' + models.map(m =>
+        o(m.model_id, (PF.b ? '' : (B.find(b => b.id == m.brand_id)?.n || '') + ' ') + m.name, PF.m)).join('');
+      $('#pf-g').innerHTML = '<option value="">Any generation</option>' + gens.map(g =>
+        o(g.id, gname(g.id), PF.g)).join('');
+
+      const ids = new Set(gens.map(g => g.id));
+      const list = P
+        .filter(p => PF.g
+          ? p.g.includes(+PF.g)
+          : (!PF.b && !PF.m) || p.g.some(id => ids.has(id)))
+        .sort((a, b) => (b.added || '').localeCompare(a.added || '') || b.id - a.id);
+
+      $('#pf-count').textContent = list.length + (list.length === 1 ? ' part' : ' parts');
+      $('#pf-list').innerHTML = list.length
+        ? `<div class="pgrid">${list.map(p => pcard(p)).join('')}</div>`
+        : '<p class="mut">No parts match this car yet.</p>';
+    }
     function route() {
       const [, page, arg, mode, extra] = location.hash.split('/');
       const param = decodeURIComponent(arg || '');
@@ -1902,6 +1955,7 @@ const thumb = (p, n) => p.img
         signup:  () => authForm('signup'),
         profile: profile,
         cart:    cartv,
+        parts:   partsPage,
         admin:   admin
       };
       (routes[page] || home)();
