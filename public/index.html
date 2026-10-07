@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ReClip – parts for cars the manufacturer forgot</title>
   <meta name="theme-color" content="#152D23">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23B6E2D3'/%3E%3Cpath d='M10 22V11a6 6 0 0 1 12 0v8a3 3 0 0 1-6 0v-7' fill='none' stroke='%23152D23' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="/ReClip_LogoV1.svg"> 
   <style>
     
     /* ---------- Theme variables ---------- */
@@ -563,9 +563,7 @@
     /* Header */
     header { background: var(--ink); border-bottom-color: var(--ink); }
     header .logo { color: var(--acc); }
-    .logo svg { width: 30px; height: 30px; flex: none; }
-    .logo svg rect { fill: var(--acc); }
-    .logo svg path { stroke: var(--ink); }
+    .logo-mark { height: 40px; width: 49px; flex: none; --logo-a: var(--acc); --logo-b: #f4c430; }
     header #nav a:not(.btn) { color: var(--acc); }
     header .btn { border: 1px solid var(--acc); }
     header .btn.ghost { color: var(--acc); background: transparent; }
@@ -586,14 +584,16 @@
 
 <body>
   <header>
-    <a class="logo" href="#/"><i></i>ReFit</a>
-    <div id="nav"></div>
+    <a class="logo" href="#/">
+      <svg class="logo-mark" viewBox="119 16 627 510" aria-hidden="true"><use href="/ReClip_LogoV1.svg#mark"/></svg>
+      <span>ReClip</span>
+    </a>
   </header>
 
   <main id="app"></main>
   <footer>
     <div class="footer-content">
-      <span>&copy; <span id="copyright-year">2026</span> ReFit</span>
+      <span>&copy; <span id="copyright-year">2026</span> ReClip</span>
       <a href="#/faq">FAQ</a>
     </div>
   </footer>
@@ -2182,8 +2182,8 @@ const thumb = (p, n) => p.img
       view(`
         <h1>Frequently asked questions</h1>
         <section class="card">
-          <h2>What is ReFit?</h2>
-          <p>ReFit helps you find replacement parts for older cars. Browse by car or search by part name or OEM number. Parts may have a downloadable 3D file, a printed version to buy, or both.</p>
+          <h2>What is ReClip?</h2>
+          <p>ReClip helps you find replacement parts for older cars. Browse by car or search by part name or OEM number. Parts may have a downloadable 3D file, a printed version to buy, or both.</p>
         </section>
         <section class="card">
           <h2>How do I share a part?</h2>
