@@ -668,21 +668,29 @@ async def run_batch(env, stmts):
     for sql, args in stmts:
         await run(env, sql, *args)
 
-async def load_cat(env):
+async def load_cat(env, brand_names=None):
     cat = {"b": {}, "m": {}, "g": {}, "label": {}}
     for r in await q(env, "SELECT name FROM Brands"):
         cat["b"][r["name"].lower()] = r["name"]
-    for r in await q(env, "SELECT b.name AS brand, m.name AS model FROM Models m "
-                          "JOIN Brands b ON b.brand_id = m.brand_id"):
-        cat["m"][(r["brand"].lower(), r["model"].lower())] = r["model"]
-    for r in await q(env, "SELECT b.name AS brand, m.name AS model, g.generation_name AS gen, "
-                          "g.start_year AS yr FROM Vehicle_Generations g "
-                          "JOIN Models m ON m.model_id = g.model_id "
-                          "JOIN Brands b ON b.brand_id = m.brand_id"):
-        gen = r["gen"] or ""
-        cat["g"][(r["brand"].lower(), r["model"].lower(), gen.lower(), int(r["yr"]))] = gen
-        label = car_label(r["brand"], r["model"], gen, int(r["yr"]))
-        cat["label"][label.lower()] = label
+    if brand_names is None:
+        groups = [None]
+    else:
+        wanted = sorted({cat["b"][n.lower()] for n in brand_names if n.lower() in cat["b"]})
+        groups = [wanted[i:i + 80] for i in range(0, len(wanted), 80)]
+    for grp in groups:
+        where = "" if grp is None else " WHERE b.name IN (" + ",".join("?" * len(grp)) + ")"
+        args = () if grp is None else tuple(grp)
+        for r in await q(env, "SELECT b.name AS brand, m.name AS model FROM Models m "
+                              "JOIN Brands b ON b.brand_id = m.brand_id" + where, *args):
+            cat["m"][(r["brand"].lower(), r["model"].lower())] = r["model"]
+        for r in await q(env, "SELECT b.name AS brand, m.name AS model, g.generation_name AS gen, "
+                              "g.start_year AS yr FROM Vehicle_Generations g "
+                              "JOIN Models m ON m.model_id = g.model_id "
+                              "JOIN Brands b ON b.brand_id = m.brand_id" + where, *args):
+            gen = r["gen"] or ""
+            cat["g"][(r["brand"].lower(), r["model"].lower(), gen.lower(), int(r["yr"]))] = gen
+            label = car_label(r["brand"], r["model"], gen, int(r["yr"]))
+            cat["label"][label.lower()] = label
     return cat
 
 def vehicle_records(brands):
@@ -893,7 +901,10 @@ async def admin_import(data: ImportIn, request: Request):
     admin = await require_admin(request)
     errors, stmts, missing = [], [], {}
     n = {"brands": 0, "models": 0, "generations": 0, "parts": 0, "fits": 0, "skipped": 0}
-    cat = await load_cat(env)
+    if data.type == "vehicles":
+        cat = await load_cat(env, [_s(b.get("name"), 100) for b in data.brands])
+    else:
+        cat = await load_cat(env)
 
     if data.type == "vehicles":
         if vehicle_records(data.brands) > MAX_VEHICLE_RECORDS:

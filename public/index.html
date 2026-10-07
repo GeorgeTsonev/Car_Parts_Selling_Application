@@ -1890,7 +1890,7 @@ const thumb = (p, n) => p.img
     };
     /* ===== JSON import (admin) ===== */
     let IMP = { open: false, data: null, html: '', ok: false, seen: {}, adds: {} };
-    const IMP_CHUNK = 50, IMP_PARTS_MAX = 100;
+    const IMP_CHUNK = 40, IMP_PARTS_MAX = 20;
     const carKey = c => [c.brand, c.model, c.generation || '', c.start_year].join('|').toLowerCase();
 
     const IMP_TEMPLATES = {
@@ -1950,18 +1950,18 @@ const thumb = (p, n) => p.img
       if (el) el.innerHTML = html;
     }
 
-    function impChunks(brands) {
+    function impChunks(brands, size = IMP_CHUNK) {
       const chunks = [];
-      let cur = [], size = 0, nb = null;
-      const flush = () => { if (cur.length) chunks.push(cur); cur = []; size = 0; };
+      let cur = [], n = 0, nb = null;
+      const flush = () => { if (cur.length) chunks.push(cur); cur = []; n = 0; };
       for (const b of brands) {
-        const start = () => { nb = { ...b, models: [] }; cur.push(nb); size += 1; };
+        const start = () => { nb = { ...b, models: [] }; cur.push(nb); n += 1; };
         start();
         for (const m of (b.models || [])) {
           const cost = 1 + ((m && m.generations) || []).length;
-          if (size + cost > IMP_CHUNK && size > 0) { flush(); start(); }
+          if (n + cost > size && n > 0) { flush(); start(); }
           nb.models.push(m);
-          size += cost;
+          n += cost;
         }
       }
       flush();
@@ -2008,25 +2008,42 @@ const thumb = (p, n) => p.img
       if (!d) return;
       const total = { brands: 0, models: 0, generations: 0, parts: 0, fits: 0, skipped: 0 };
       const errors = [];
-      let errTotal = 0, done = 0;
-      const jobs = d.type === 'vehicles'
-        ? impChunks(d.brands).map(c => ({ brands: c }))
+      let errTotal = 0, done = 0, retries = 0, limit = IMP_CHUNK;
+      const queue = d.type === 'vehicles'
+        ? impChunks(d.brands).map(c => ({ brands: c, size: IMP_CHUNK }))
         : [{ parts: d.parts, add_cars: impApproved() }];
       try {
-        for (let i = 0; i < jobs.length; i++) {
-          impOut(`<p class="mut">${dry ? 'Checking' : 'Importing'} part ${i + 1} of ${jobs.length}…</p>`);
-          const r = await api('POST', '/api/admin/import', { type: d.type, dry_run: dry, ...jobs[i] });
+        while (queue.length) {
+          const job = queue.shift();
+          if (job.brands && job.size > limit) {
+            queue.unshift(...impChunks(job.brands, limit).map(c => ({ brands: c, size: limit })));
+            continue;
+          }
+          impOut(`<p class="mut">${dry ? 'Checking' : 'Importing'} part ${done + 1} of about ${done + queue.length + 1}`
+            + (retries ? ` (${retries} automatic retries with smaller parts)` : '') + '…</p>');
+          const body = job.brands ? { brands: job.brands } : { parts: job.parts, add_cars: job.add_cars };
+          let r;
+          try {
+            r = await api('POST', '/api/admin/import', { type: d.type, dry_run: dry, ...body });
+          } catch (e) {
+            if (job.brands && job.size > 5) {
+              limit = Math.floor(job.size / 2);
+              queue.unshift(...impChunks(job.brands, limit).map(c => ({ brands: c, size: limit })));
+              retries++;
+              continue;
+            }
+            throw e;
+          }
           for (const k in total) total[k] += (r.counts && r.counts[k]) || 0;
           errors.push(...r.errors);
           errTotal += r.error_total;
           for (const m of r.missing) IMP.seen[carKey(m)] = m;
           if (!dry && !r.ok) break;
-          if (!dry) done++;
+          done++;
         }
       } catch (e) {
-        const note = !dry && done ? ` ${done} of ${jobs.length} parts of the file were already imported. Run the same file again to continue.` : '';
-        impOut(`<p class="err">${esc(e.message)}${esc(note)}</p>`);
-        if (done) { await load(); }
+        impOut(`<p class="err">${esc(e.message)}${esc(done ? ' ' + done + ' parts of the file were imported before this error. Run the same file again to continue.' : '')}</p>`);
+        if (done) await load();
         return;
       }
       if (!dry) {
