@@ -457,6 +457,9 @@
     .epos input { width: 84px; padding: 6px 8px; }
     .epos button { padding: 6px 12px; }
     .epos button:disabled { opacity: .45; cursor: default; }
+    details.card > summary { cursor: pointer; font-weight: 800; font-size: 22px; }
+    .seg { display: flex; gap: 8px; flex-wrap: wrap; }
+    .danger { background: #c0392b; color: #fff; }
   </style>
 </head>
 
@@ -496,7 +499,7 @@
     let M = [], U = {}, B = [], G = [], P = [];  // models, users, brands, generations, parts
     let db = null, usr = null, uid = '', isAdmin = false, assets = null, dlc = null;
     let SPEC = {};
-
+    let GR = [];
     const J = { 'Content-Type': 'application/json' };
     let cartItems = [];
 
@@ -585,6 +588,7 @@
 async function load() {
   const d = await (await fetch('/api/catalog')).json();
   SPEC = d.spec_schema || {};
+  GR = d.generations;
   M = d.models;
   B = d.brands
   .map(b => ({ id: b.brand_id, n: b.name, logo: b.logo_url }))
@@ -1563,12 +1567,186 @@ const thumb = (p, n) => p.img
       AF = { name: '', oem: '', brand: '', model: '', status: '', type: '', cat: '', min: '', max: '', sort: 'new' };
       admin();
     }
+    let ADM = {
+      open: { brand: false, model: false, gen: false },
+      mode: { brand: 'add', model: 'add', gen: 'add' },
+      sel: { brand: '', model: '', gen: '' },
+      fb: '', gb: '', gm: ''
+    };
 
+    const opt = (v, label, cur) =>
+      `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+    const brandOptions = (cur, any) =>
+      (any ? `<option value="">${any}</option>` : '') + B.map(b => opt(b.id, b.n, cur)).join('');
+    const modelLabel = m => (B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name;
+
+    function admDetails(key, title) {
+      return `<details class="card" id="adm-${key}"${ADM.open[key] ? ' open' : ''}
+        ontoggle="ADM.open['${key}'] = this.open">
+        <summary>${title}</summary>
+        <div id="adm-${key}-body">${admBody(key)}</div></details>`;
+    }
+    function admBody(key) {
+      const mode = ADM.mode[key];
+      const seg = `<div class="seg">
+        <button type="button" class="${mode === 'add' ? '' : 'ghost'}" onclick="admMode('${key}','add')">Add new</button>
+        <button type="button" class="${mode === 'edit' ? '' : 'ghost'}" onclick="admMode('${key}','edit')">Edit or delete</button></div>`;
+      return seg + (mode === 'add' ? admAdd[key]() : admEdit[key]());
+    }
+    function admRefresh(key) { const el = $('#adm-' + key + '-body'); if (el) el.innerHTML = admBody(key); }
+    function admMode(key, mode) { ADM.mode[key] = mode; admRefresh(key); }
+    function admSet(key, field, val) {
+      if (key === 'gen') {
+        if (field === 'gb') { ADM.gb = val; ADM.gm = ''; ADM.sel.gen = ''; }
+        else if (field === 'gm') { ADM.gm = val; ADM.sel.gen = ''; }
+        else ADM.sel.gen = val;
+      } else if (key === 'model') {
+        if (field === 'fb') { ADM.fb = val; ADM.sel.model = ''; } else ADM.sel.model = val;
+      } else ADM.sel.brand = val;
+      admRefresh(key);
+    }
+
+    const admAdd = {
+      brand: () => `
+        <form class="aform" onsubmit="return addB(event)">
+          <h3>New brand</h3>
+          <label>Brand name<input name="n" placeholder="e.g. Volkswagen" required></label>
+          <label>Logo URL (optional)<input name="logo" placeholder="https://..."></label>
+          <button>Add brand</button>
+        </form>`,
+      model: () => `
+        <form class="aform" onsubmit="return addM(event)">
+          <h3>New model</h3>
+          <label>Brand<select name="b">${brandOptions('')}</select></label>
+          <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
+          <label>Model picture (optional)
+            <input name="pic" data-url placeholder="https://... or choose a file below">
+            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+          </label>
+          <button>Add model</button>
+        </form>`,
+      gen: () => `
+        <form class="aform" onsubmit="return addG(event)">
+          <h3>New generation</h3>
+          <label>Model<select name="m">${M.map(m => `<option value="${m.model_id}">${esc(modelLabel(m))}</option>`).join('')}</select></label>
+          <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
+          <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
+          <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
+          <label>Generation photo (optional)
+            <input name="img" data-url placeholder="https://... or choose a file below">
+            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+          </label>
+          <button>Add generation</button>
+        </form>`
+    };
+
+    const admEdit = {
+      brand: () => {
+        const b = B.find(x => x.id == ADM.sel.brand);
+        return `<label>Brand<select onchange="admSet('brand','sel',this.value)">${brandOptions(ADM.sel.brand, 'Choose a brand')}</select></label>`
+          + (b ? `<form class="aform" onsubmit="return saveB(event)">
+            <label>Brand name<input name="n" value="${esc(b.n)}" required></label>
+            <label>Logo URL<input name="logo" value="${esc(b.logo || '')}"></label>
+            <button>Save changes</button>
+            <button type="button" class="danger" onclick="delB()">Delete brand</button>
+          </form>` : '<p class="mut">Choose a brand to edit or delete it.</p>');
+      },
+      model: () => {
+        const list = M.filter(m => !ADM.fb || m.brand_id == ADM.fb);
+        const m = M.find(x => x.model_id == ADM.sel.model);
+        return `<div class="filters">
+          <label>Brand filter<select onchange="admSet('model','fb',this.value)">${brandOptions(ADM.fb, 'Any brand')}</select></label>
+          <label>Model<select onchange="admSet('model','sel',this.value)">
+            <option value="">Choose a model</option>${list.map(x => opt(x.model_id, modelLabel(x), ADM.sel.model)).join('')}</select></label></div>`
+          + (m ? `<form class="aform" onsubmit="return saveM(event)">
+            <label>Brand<select name="b">${brandOptions(m.brand_id)}</select></label>
+            <label>Model name<input name="n" value="${esc(m.name)}" required></label>
+            <label>Model picture
+              <input name="pic" data-url value="${esc(m.picture_url || '')}" placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
+            <button>Save changes</button>
+            <button type="button" class="danger" onclick="delM()">Delete model</button>
+          </form>` : '<p class="mut">Choose a model to edit or delete it.</p>');
+      },
+      gen: () => {
+        const modelsShown = M.filter(m => !ADM.gb || m.brand_id == ADM.gb);
+        const list = GR.filter(g => {
+          const m = M.find(x => x.model_id == g.model_id);
+          return (!ADM.gb || m?.brand_id == ADM.gb) && (!ADM.gm || g.model_id == ADM.gm);
+        });
+        const g = GR.find(x => x.generation_id == ADM.sel.gen);
+        const fits = g ? P.filter(p => p.g.includes(g.generation_id)).length : 0;
+        return `<div class="filters">
+          <label>Brand filter<select onchange="admSet('gen','gb',this.value)">${brandOptions(ADM.gb, 'Any brand')}</select></label>
+          <label>Model filter<select onchange="admSet('gen','gm',this.value)">
+            <option value="">Any model</option>${modelsShown.map(m => opt(m.model_id, modelLabel(m), ADM.gm)).join('')}</select></label>
+          <label>Generation<select onchange="admSet('gen','sel',this.value)">
+            <option value="">${list.length ? 'Choose a generation' : 'No generations match'}</option>
+            ${list.map(x => opt(x.generation_id, gname(x.generation_id), ADM.sel.gen)).join('')}</select></label></div>`
+          + (g ? `<p class="mut">${fits} part(s) currently fit this car. Deleting the generation does not delete any part.</p>
+          <form class="aform" onsubmit="return saveG(event)">
+            <label>Model<select name="m">${M.map(m => opt(m.model_id, modelLabel(m), g.model_id)).join('')}</select></label>
+            <label>Generation name<input name="n" value="${esc(g.generation_name || '')}"></label>
+            <label>Start year<input name="s" type="number" min="1900" max="2100" value="${esc(g.start_year)}" required></label>
+            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" value="${esc(g.end_year || '')}"></label>
+            <label>Generation photo
+              <input name="img" data-url value="${esc(g.overview_image_url || '')}" placeholder="https://... or choose a file below">
+              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            </label>
+            <button>Save changes</button>
+            <button type="button" class="danger" onclick="delG()">Delete generation</button>
+          </form>` : '<p class="mut">Filter and choose a generation to edit or delete it.</p>');
+      }
+    };
+
+    const saveB = e => {
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('PUT', '/api/admin/brands/' + ADM.sel.brand,
+        { name: f.get('n'), logo_url: f.get('logo') || '' }), 'Brand saved.');
+      return false;
+    };
+    const saveM = e => {
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('PUT', '/api/admin/models/' + ADM.sel.model,
+        { brand_id: +f.get('b'), name: f.get('n'), picture_url: f.get('pic') || '' }), 'Model saved.');
+      return false;
+    };
+    const saveG = e => {
+      e.preventDefault(); const f = new FormData(e.target);
+      adminDo(() => api('PUT', '/api/admin/generations/' + ADM.sel.gen, {
+        model_id: +f.get('m'), generation_name: f.get('n') || '', start_year: +f.get('s'),
+        end_year: +(f.get('e') || 0), overview_image_url: f.get('img') || ''
+      }), 'Generation saved.');
+      return false;
+    };
+    const delB = () => {
+      const id = +ADM.sel.brand, b = B.find(x => x.id === id);
+      const n = M.filter(m => m.brand_id === id).length;
+      if (n) return toast(`This brand still has ${n} model(s). Delete or move them first.`);
+      if (!confirm(`Delete brand "${b.n}"?`)) return;
+      ADM.sel.brand = '';
+      adminDo(() => api('DELETE', '/api/admin/brands/' + id), 'Brand deleted.');
+    };
+    const delM = () => {
+      const id = +ADM.sel.model, m = M.find(x => x.model_id === id);
+      const n = GR.filter(g => g.model_id === id).length;
+      if (n) return toast(`This model still has ${n} generation(s). Delete or move them first.`);
+      if (!confirm(`Delete model "${m.name}"?`)) return;
+      ADM.sel.model = '';
+      adminDo(() => api('DELETE', '/api/admin/models/' + id), 'Model deleted.');
+    };
+    const delG = () => {
+      const id = +ADM.sel.gen;
+      const fits = P.filter(p => p.g.includes(id));
+      const only = fits.filter(p => p.g.length === 1).length;
+      if (!confirm(`Delete "${gname(id)}"?\n\nNo parts will be deleted. ${fits.length} part(s) lose their link to this car`
+        + ` (and its pin).` + (only ? `\n${only} of them fit no other car and will have no car assigned.` : ''))) return;
+      ADM.sel.gen = '';
+      adminDo(() => api('DELETE', '/api/admin/generations/' + id), 'Generation deleted. Parts were kept.');
+    };
     function admin() {
       if (!isAdmin) return home();
-
-      const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
-      const modelOpts = M.map(m =>
         `<option value="${m.model_id}">${esc((B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name)}</option>`).join('');
       const brandFilter = '<option value="">Any brand</option>'
         + B.map(b => `<option value="${b.id}"${b.id == AF.brand ? ' selected' : ''}>${esc(b.n)}</option>`).join('');
@@ -1577,40 +1755,9 @@ const thumb = (p, n) => p.img
       view(`
         <h1>Admin</h1>
 
-        <div class="card">
-          <h2>Add a brand, model or generation</h2>
-
-          <form class="aform" onsubmit="return addB(event)">
-            <h3>New brand</h3>
-            <label>Brand name<input name="n" placeholder="e.g. Volkswagen" required></label>
-            <label>Logo URL (optional)<input name="logo" placeholder="https://..."></label>
-            <button>Add brand</button>
-          </form>
-
-          <form class="aform" onsubmit="return addM(event)">
-            <h3>New model</h3>
-            <label>Brand<select name="b">${brandOpts}</select></label>
-            <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
-            <label>Model picture (optional)
-              <input name="pic" data-url placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
-            </label>
-            <button>Add model</button>
-          </form>
-
-          <form class="aform" onsubmit="return addG(event)">
-            <h3>New generation</h3>
-            <label>Model<select name="m">${modelOpts}</select></label>
-            <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
-            <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
-            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
-            <label>Generation photo (optional)
-              <input name="img" data-url placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
-            </label>
-            <button>Add generation</button>
-          </form>
-        </div>
+        ${admDetails('brand', 'Brands')}
+        ${admDetails('model', 'Models')}
+        ${admDetails('gen', 'Generations')}
 
         <h2>Find parts</h2>
         <form id="af" class="card filters" oninput="adminFilter(event)" onsubmit="return false">
@@ -1659,80 +1806,6 @@ const thumb = (p, n) => p.img
       try { await fn(); await load(); toast(okMsg); } catch (e) { toast(e.message); }
       admin();
     }
-    /*function admin() { THIS IS THE OLD ADMIN FUNCTION, KEPT IN CASE SOMETHING GOES WRONG
-      if (!isAdmin) return home();
-
-      const brandOpts = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
-      const modelOpts = M.map(m =>
-            `<option value="${m.model_id}">${esc((B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name)}</option>`).join('');
-
-      const partRows = P.map(p => `
-        <div class="row" style="grid-template-columns:1fr auto auto">
-          <div><b>${esc(p.name)}</b><br><span class="mut">by ${esc(p.au)}</span></div>
-          <select onchange="setSt('${p.id}', this.value)" aria-label="Status">
-            ${Object.keys(ST).map(s =>
-              `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
-          </select>
-          <button class="ghost" onclick="delP('${p.id}')">Delete</button>
-        </div>`).join('');
-      const partCards = P.map(p => `
-        <div class="card">
-          <div><b>${esc(p.name)}</b> <span class="mut">by ${esc(p.au)}</span></div>
-          <div class="sf">
-            <select onchange="setSt(${p.id}, this.value)" aria-label="Status">
-              ${Object.keys(ST).map(s => `<option value="${s}"${s == p.st ? ' selected' : ''}>${ST[s]}</option>`).join('')}
-            </select>
-            <button class="ghost" onclick="delP(${p.id})">Delete</button>
-          </div>
-          <form class="aform" onsubmit="return editP(event, ${p.id})">
-            <label>Printed price (€)<input name="price" type="number" step="0.01" min="0" placeholder="e.g. 4.50" value="${p.price || ''}"></label>
-            <label>Picture URL<input name="img" placeholder="https://..." value="${esc(p.img)}"></label>
-            <label>OEM number<input name="oem" placeholder="optional" value="${esc(p.oem)}"></label>
-            <label><span>Sold as printed part</span><input name="phys" type="checkbox" style="width:auto"${p.k != 'print' ? ' checked' : ''}></label>
-            <button>Save details</button>
-          </form>
-        </div>`).join('');
-      view(`
-        <h1>Admin</h1>
-
-        <div class="card">
-          <h2>Add a brand, model or generation</h2>
-
-          <form class="aform" onsubmit="return addB(event)">
-            <h3>New brand</h3>
-            <label>Brand name<input name="n" placeholder="e.g. Volkswagen" required></label>
-            <label>Logo URL (optional)<input name="logo" placeholder="https://..."></label>
-            <button>Add brand</button>
-          </form>
-
-          <form class="aform" onsubmit="return addM(event)">
-            <h3>New model</h3>
-            <label>Brand<select name="b">${brandOpts}</select></label>
-            <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
-            <label>Model picture (optional)
-              <input name="pic" data-url placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
-            </label>
-            <button>Add model</button>
-          </form>
-
-          <form class="aform" onsubmit="return addG(event)">
-            <h3>New generation</h3>
-            <label>Model<select name="m">${modelOpts}</select></label>
-            <label>Generation name<input name="n" placeholder="e.g. Mk4"></label>
-            <label>Start year<input name="s" type="number" min="1900" max="2100" placeholder="1997" required></label>
-            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
-            <label>Generation photo (optional)
-              <input name="img" data-url placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
-            </label>
-            <button>Add generation</button>
-          </form>
-        </div>
-
-        <h2>Parts</h2>
-        ${partCards || '<p class="mut">No parts yet.</p>'}`);
-    }*/
     
     async function adminPic(inp) {
       const f = inp.files[0];

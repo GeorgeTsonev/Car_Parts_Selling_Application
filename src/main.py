@@ -496,7 +496,71 @@ async def admin_add_generation(data: GenIn, request: Request):
         "VALUES(?, ?, ?, NULLIF(?, 0), NULLIF(?, ''))",
         data.model_id, data.generation_name.strip(), data.start_year,
         data.end_year, data.overview_image_url.strip())
+async def _count(env, sql, *args):
+    return (await q(env, sql, *args))[0]["n"]
 
+@app.put("/api/admin/brands/{brand_id}")
+async def admin_edit_brand(brand_id: int, data: BrandIn, request: Request):
+    await require_admin(request)
+    if not data.name.strip():
+        raise HTTPException(400, "Enter a brand name.")
+    return await admin_write(request.scope["env"],
+        "UPDATE Brands SET name = ?, logo_url = NULLIF(?, '') WHERE brand_id = ?",
+        data.name.strip(), data.logo_url.strip(), brand_id)
+
+@app.delete("/api/admin/brands/{brand_id}")
+async def admin_delete_brand(brand_id: int, request: Request):
+    env = request.scope["env"]
+    await require_admin(request)
+    n = await _count(env, "SELECT COUNT(*) AS n FROM Models WHERE brand_id = ?", brand_id)
+    if n:
+        raise HTTPException(409, f"This brand still has {n} model(s). Delete or move them first.")
+    return await admin_write(env, "DELETE FROM Brands WHERE brand_id = ?", brand_id)
+
+@app.put("/api/admin/models/{model_id}")
+async def admin_edit_model(model_id: int, data: ModelIn, request: Request):
+    await require_admin(request)
+    if not data.name.strip():
+        raise HTTPException(400, "Enter a model name.")
+    return await admin_write(request.scope["env"],
+        "UPDATE Models SET brand_id = ?, name = ?, picture_url = NULLIF(?, '') WHERE model_id = ?",
+        data.brand_id, data.name.strip(), data.picture_url.strip(), model_id)
+
+@app.delete("/api/admin/models/{model_id}")
+async def admin_delete_model(model_id: int, request: Request):
+    env = request.scope["env"]
+    await require_admin(request)
+    n = await _count(env, "SELECT COUNT(*) AS n FROM Vehicle_Generations WHERE model_id = ?", model_id)
+    if n:
+        raise HTTPException(409, f"This model still has {n} generation(s). Delete or move them first.")
+    return await admin_write(env, "DELETE FROM Models WHERE model_id = ?", model_id)
+
+@app.put("/api/admin/generations/{generation_id}")
+async def admin_edit_generation(generation_id: int, data: GenIn, request: Request):
+    await require_admin(request)
+    if not (1900 <= data.start_year <= 2100):
+        raise HTTPException(400, "Enter a valid start year.")
+    if data.end_year and data.end_year < data.start_year:
+        raise HTTPException(400, "The end year cannot be before the start year.")
+    return await admin_write(request.scope["env"],
+        "UPDATE Vehicle_Generations SET model_id = ?, generation_name = ?, start_year = ?, "
+        "end_year = NULLIF(?, 0), overview_image_url = NULLIF(?, '') WHERE generation_id = ?",
+        data.model_id, data.generation_name.strip(), data.start_year,
+        data.end_year, data.overview_image_url.strip(), generation_id)
+
+@app.delete("/api/admin/generations/{generation_id}")
+async def admin_delete_generation(generation_id: int, request: Request):
+    env = request.scope["env"]
+    await require_admin(request)
+    if not await q(env, "SELECT generation_id FROM Vehicle_Generations WHERE generation_id = ?", generation_id):
+        raise HTTPException(404, "Generation not found.")
+    try:
+        # Only the fitment links go. Parts and Part_Files are never touched.
+        await run(env, "DELETE FROM Part_Compatibilities WHERE generation_id = ?", generation_id)
+        await run(env, "DELETE FROM Vehicle_Generations WHERE generation_id = ?", generation_id)
+    except Exception:
+        raise HTTPException(409, "Could not delete this generation. Something else still references it.")
+    return {"ok": True}
 
 @app.put("/api/admin/parts/{part_id}/status")
 async def admin_part_status(part_id: int, data: StatusIn, request: Request):
