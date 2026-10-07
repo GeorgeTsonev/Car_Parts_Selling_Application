@@ -249,11 +249,12 @@
       color: var(--mut);
     }
     /* ---------- Part cards (car page) ---------- */
-    main:has(.pgrid) { max-width: 1160px; }
+    main:has(.pgrid) { max-width: 1060px; }
+    main:has(.pgrid) .car { max-width: 600px; margin-left: auto; margin-right: auto; }
     .pgrid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
+      gap: 12px;
       margin: 10px 0;
     }
     .pcard {
@@ -267,10 +268,10 @@
     }
     .pcard:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(0, 0, 0, .14); }
     .pimg {
-      position: relative; aspect-ratio: 4 / 3;
+      position: relative; aspect-ratio: 16 / 10;
       background: var(--bg);
       display: grid; place-items: center;
-      font-size: 48px; overflow: hidden;
+      font-size: 40px; overflow: hidden;
     }
     .pimg img { width: 100%; height: 100%; object-fit: cover; display: block; }
     .pstat {
@@ -286,15 +287,15 @@
       border-radius: 12px; background: var(--mk); color: #fff;
       font: 800 13px/24px Barlow, sans-serif; text-align: center;
     }
-    .pbody { padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
-    .pbody h3 { margin: 0; font-size: 18px; line-height: 1.25; }
-    .pmeta { color: var(--mut); font-size: 14px; }
+    .pbody { padding: 10px 12px 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+    .pbody h3 { margin: 0; font-size: 16px; line-height: 1.25; }
+    .pmeta { color: var(--mut); font-size: 13px; }
     .pfoot {
       margin-top: auto; padding-top: 10px; border-top: 1px solid var(--line);
       display: flex; justify-content: space-between; align-items: baseline; gap: 8px;
       font-size: 14px; color: var(--mut);
     }
-    .pfoot b { color: var(--ink); font-size: 17px; font-weight: 800; text-align: right; }
+    .pfoot b { color: var(--ink); font-size: 16px; font-weight: 800; text-align: right; }
     @media (max-width: 1000px) { .pgrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
     @media (max-width: 760px)  { .pgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 460px)  { .pgrid { grid-template-columns: 1fr; } }
