@@ -699,12 +699,11 @@ const thumb = (p, n) => p.img
     function nav() {
       $('#nav').innerHTML =
         `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
-        `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
         + (me
           ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
           : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
-      }
+    }
 
     function tags(p) {
       return (p.tech ? `<span class="tag">${esc(p.tech)}</span>` : '')
