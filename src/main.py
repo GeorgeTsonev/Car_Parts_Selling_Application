@@ -283,6 +283,7 @@ class PartIn(BaseModel):
     license: str
     generation_id: int
     file_key: str
+    oem_part_number: str = ""
     image_key: str = ""
     steps: str = ""
     technique: str
@@ -386,11 +387,11 @@ async def create_part(data: PartIn, request: Request):
     supports = 1 if specs.get("supports") == "Yes" else 0
 
     rows = await q(env,
-        "INSERT INTO Parts(sku, name, description, category, disassembly_instructions, "
+        "INSERT INTO Parts(sku, name, description, oem_part_number, category, disassembly_instructions, "
         "author_user_id, license, image_url, manufacturing_technique, material, "
         "manufacturing_specs, status) "
-        "VALUES(?, ?, ?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'draft') RETURNING part_id",
-        "U-" + secrets.token_hex(6), name, desc, data.category, steps, uid,
+        "VALUES(?, ?, ?, NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, ''), ?, ?, ?, 'draft') RETURNING part_id",
+        "U-" + secrets.token_hex(6), name, desc, data.oem_part_number.strip(), data.category, steps, uid,
         data.license, image_url, data.technique, material, json.dumps(specs))
     pid = rows[0]["part_id"]
 
@@ -628,6 +629,319 @@ async def admin_hotspots(data: HotspotsIn, request: Request):
                        "hotspot_y = NULLIF(?, -1) WHERE part_id = ? AND generation_id = ?",
                   x, y, p.part_id, data.generation_id)
     return {"ok": True}
+# ---------- JSON import (admin) ----------
+import difflib
+
+STATUSES = ("draft", "community_tested", "verified_fit", "flagged")
+MAX_VEHICLE_RECORDS = 400
+MAX_PARTS = 100
+
+class ImportIn(BaseModel):
+    type: str
+    dry_run: bool = True
+    brands: list[dict] = []
+    parts: list[dict] = []
+    add_cars: list[dict] = []
+
+def _s(v, n=200):
+    return "" if v is None else str(v).strip()[:n]
+
+def _int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+def car_label(brand, model, gen, yr):
+    return " ".join(x for x in (brand, model, gen, f"({yr})") if x)
+
+async def run_batch(env, stmts):
+    try:
+        from js import Array
+        batch = Array.new()
+        for sql, args in stmts:
+            batch.push(env.DB.prepare(sql).bind(*args))
+        await env.DB.batch(batch)
+        return
+    except Exception as e:
+        print("D1 batch failed, writing one statement at a time:", e)
+    for sql, args in stmts:
+        await run(env, sql, *args)
+
+async def load_cat(env, brand_names=None):
+    cat = {"b": {}, "m": {}, "g": {}, "label": {}}
+    for r in await q(env, "SELECT name FROM Brands"):
+        cat["b"][r["name"].lower()] = r["name"]
+    if brand_names is None:
+        groups = [None]
+    else:
+        wanted = sorted({cat["b"][n.lower()] for n in brand_names if n.lower() in cat["b"]})
+        groups = [wanted[i:i + 80] for i in range(0, len(wanted), 80)]
+    for grp in groups:
+        where = "" if grp is None else " WHERE b.name IN (" + ",".join("?" * len(grp)) + ")"
+        args = () if grp is None else tuple(grp)
+        for r in await q(env, "SELECT b.name AS brand, m.name AS model FROM Models m "
+                              "JOIN Brands b ON b.brand_id = m.brand_id" + where, *args):
+            cat["m"][(r["brand"].lower(), r["model"].lower())] = r["model"]
+        for r in await q(env, "SELECT b.name AS brand, m.name AS model, g.generation_name AS gen, "
+                              "g.start_year AS yr FROM Vehicle_Generations g "
+                              "JOIN Models m ON m.model_id = g.model_id "
+                              "JOIN Brands b ON b.brand_id = m.brand_id" + where, *args):
+            gen = r["gen"] or ""
+            cat["g"][(r["brand"].lower(), r["model"].lower(), gen.lower(), int(r["yr"]))] = gen
+            label = car_label(r["brand"], r["model"], gen, int(r["yr"]))
+            cat["label"][label.lower()] = label
+    return cat
+
+def vehicle_records(brands):
+    total = 0
+    for b in brands:
+        total += 1
+        models = b.get("models") if isinstance(b.get("models"), list) else []
+        for m in models:
+            total += 1
+            if isinstance(m, dict) and isinstance(m.get("generations"), list):
+                total += len(m["generations"])
+    return total
+
+def plan_vehicles(cat, brands, errors, stmts, n):
+    for i, b in enumerate(brands):
+        bname = _s(b.get("name"), 100)
+        if not bname:
+            errors.append(f"brand #{i + 1}: the name is required.")
+            continue
+        bp = f"brand '{bname}'"
+        bk = bname.lower()
+        if bk not in cat["b"]:
+            cat["b"][bk] = bname
+            n["brands"] += 1
+            stmts.append(("INSERT OR IGNORE INTO Brands(name, logo_url) VALUES(?, NULLIF(?, ''))",
+              (bname, _s(b.get("logo_url"), 500))))
+        else:
+            n["skipped"] += 1
+        bcanon = cat["b"][bk]
+        models = b.get("models") or []
+        if not isinstance(models, list):
+            errors.append(f"{bp}: 'models' must be a list.")
+            continue
+        for j, m in enumerate(models):
+            mname = _s(m.get("name"), 100) if isinstance(m, dict) else ""
+            if not mname:
+                errors.append(f"{bp}, model #{j + 1}: the name is required.")
+                continue
+            mp = f"{bp} > model '{mname}'"
+            mk = mname.lower()
+            if (bk, mk) not in cat["m"]:
+                cat["m"][(bk, mk)] = mname
+                n["models"] += 1
+                stmts.append(("INSERT INTO Models(brand_id, name, picture_url) "
+                    "SELECT b.brand_id, ?, NULLIF(?, '') FROM Brands b "
+                    "WHERE b.name = ? AND NOT EXISTS (SELECT 1 FROM Models m "
+                    "WHERE m.brand_id = b.brand_id AND m.name = ?) LIMIT 1",
+                    (mname, _s(m.get("picture_url"), 500), bcanon, mname)))
+            else:
+                n["skipped"] += 1
+            mcanon = cat["m"][(bk, mk)]
+            gens = m.get("generations") or []
+            if not isinstance(gens, list):
+                errors.append(f"{mp}: 'generations' must be a list.")
+                continue
+            for k, g in enumerate(gens):
+                gp = f"{mp} > generation #{k + 1}"
+                if not isinstance(g, dict):
+                    errors.append(f"{gp}: must be an object.")
+                    continue
+                gname = _s(g.get("name"), 100)
+                start, end = _int(g.get("start_year")), _int(g.get("end_year")) or 0
+                if start is None or not (1900 <= start <= 2100):
+                    errors.append(f"{gp}: start_year must be a year between 1900 and 2100.")
+                    continue
+                if end and not (start <= end <= 2100):
+                    errors.append(f"{gp}: end_year must be between the start year and 2100.")
+                    continue
+                key = (bk, mk, gname.lower(), start)
+                if key not in cat["g"]:
+                    cat["g"][key] = gname
+                    n["generations"] += 1
+                    stmts.append(("INSERT INTO Vehicle_Generations(model_id, generation_name, start_year, "
+                        "end_year, overview_image_url) "
+                        "SELECT m.model_id, ?, ?, NULLIF(?, 0), NULLIF(?, '') FROM Models m "
+                        "JOIN Brands b ON b.brand_id = m.brand_id "
+                        "WHERE b.name = ? AND m.name = ? AND NOT EXISTS (SELECT 1 FROM Vehicle_Generations g "
+                        "WHERE g.model_id = m.model_id AND COALESCE(g.generation_name, '') = ? "
+                        "AND g.start_year = ?) LIMIT 1",
+                        (gname, start, end, _s(g.get("photo_url"), 500), bcanon, mcanon, gname, start)))
+                else:
+                    n["skipped"] += 1
+
+PART_INSERT = ("INSERT INTO Parts(sku, name, description, oem_part_number, category, "
+               "disassembly_instructions, image_url, author_user_id, license, status, "
+               "is_available_physical, physical_print_price, manufacturing_technique, "
+               "material, manufacturing_specs) "
+               "SELECT ?, ?, ?, NULLIF(?, ''), ?, ?, NULLIF(?, ''), ?, ?, ?, ?, NULLIF(?, 0), ?, "
+               "NULLIF(?, ''), ? WHERE NOT EXISTS (SELECT 1 FROM Parts WHERE sku = ?)")
+
+COMPAT_INSERT = ("INSERT OR IGNORE INTO Part_Compatibilities(part_id, generation_id, hotspot_x, hotspot_y) "
+                 "SELECT p.part_id, g.generation_id, NULLIF(?, -1), NULLIF(?, -1) "
+                 "FROM Parts p JOIN Vehicle_Generations g ON 1 = 1 "
+                 "JOIN Models m ON m.model_id = g.model_id JOIN Brands b ON b.brand_id = m.brand_id "
+                 "WHERE p.sku = ? AND b.name = ? AND m.name = ? "
+                 "AND COALESCE(g.generation_name, '') = ? AND g.start_year = ? LIMIT 1")
+
+async def plan_parts(env, cat, parts, errors, stmts, n, missing, admin_id):
+    skus_db = {r["sku"] for r in await q(env, "SELECT sku FROM Parts WHERE sku IS NOT NULL")}
+    names = sorted({_s(p.get("author"), 50) for p in parts if _s(p.get("author"), 50)})
+    authors = {}
+    if names:
+        marks = ",".join("?" * len(names))
+        for r in await q(env, f"SELECT user_id, username FROM Users WHERE username IN ({marks})", *names):
+            authors[r["username"]] = r["user_id"]
+    seen = set()
+    for i, p in enumerate(parts):
+        sku = _s(p.get("sku"), 64)
+        if not sku or not all(c.isalnum() or c in "-_." for c in sku):
+            errors.append(f"parts[{i}]: sku is required (letters, digits, - _ . only).")
+            continue
+        pp = f"part '{sku}'"
+        if sku in seen:
+            errors.append(f"{pp}: the sku appears twice in this file.")
+            continue
+        seen.add(sku)
+        if sku in skus_db:
+            n["skipped"] += 1
+            continue
+
+        name, desc = _s(p.get("name"), 150), _s(p.get("description"), 4000)
+        if len(name) < 3:
+            errors.append(f"{pp}: name needs 3 to 150 characters.")
+        if not desc:
+            errors.append(f"{pp}: description is required.")
+        category = _s(p.get("category"))
+        if category not in CATEGORIES:
+            errors.append(f"{pp}: category must be one of {', '.join(sorted(CATEGORIES))}.")
+        lic = _s(p.get("license")) or "CC-BY-SA-4.0"
+        if lic not in LICENSES:
+            errors.append(f"{pp}: license must be one of {', '.join(sorted(LICENSES))}.")
+        status = _s(p.get("status")) or "draft"
+        if status not in STATUSES:
+            errors.append(f"{pp}: status must be one of {', '.join(STATUSES)}.")
+        author = _s(p.get("author"), 50)
+        if author and author not in authors:
+            errors.append(f"{pp}: no user named '{author}'.")
+        tech = _s(p.get("technique"))
+        raw = p.get("specs") if isinstance(p.get("specs"), dict) else {}
+        specs = {}
+        try:
+            specs = clean_specs(tech, raw)
+        except HTTPException as e:
+            errors.append(f"{pp}: {e.detail}")
+        try:
+            price = float(p.get("printed_price") or 0)
+            if price < 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            errors.append(f"{pp}: printed_price must be a number of 0 or more.")
+            price = 0.0
+        image = _s(p.get("image_url"), 500)
+        if image and not image.startswith(("http://", "https://")):
+            errors.append(f"{pp}: image_url must start with http:// or https://.")
+
+        fits = p.get("fits")
+        if not isinstance(fits, list) or not fits:
+            errors.append(f"{pp}: 'fits' must list at least one car.")
+            continue
+        fit_args = []
+        for j, f in enumerate(fits):
+            fp = f"{pp}, fit #{j + 1}"
+            if not isinstance(f, dict):
+                errors.append(f"{fp}: must be an object.")
+                continue
+            brand, model, gen = _s(f.get("brand"), 100), _s(f.get("model"), 100), _s(f.get("generation"), 100)
+            yr = _int(f.get("start_year"))
+            if not brand or not model or yr is None:
+                errors.append(f"{fp}: brand, model and start_year are required.")
+                continue
+            x, y = f.get("x"), f.get("y")
+            pin = (-1.0, -1.0)
+            if (x is None) != (y is None):
+                errors.append(f"{fp}: give both x and y, or neither.")
+                continue
+            if x is not None:
+                try:
+                    pin = (round(float(x), 1), round(float(y), 1))
+                except (TypeError, ValueError):
+                    errors.append(f"{fp}: x and y must be numbers.")
+                    continue
+                if not (0 <= pin[0] <= 100 and 0 <= pin[1] <= 100):
+                    errors.append(f"{fp}: x and y must be between 0 and 100.")
+                    continue
+            key = (brand.lower(), model.lower(), gen.lower(), yr)
+            if key not in cat["g"]:
+                item = missing.setdefault(key, {"brand": brand, "model": model, "generation": gen,
+                                                "start_year": yr, "parts": []})
+                if sku not in item["parts"]:
+                    item["parts"].append(sku)
+                continue
+            fit_args.append((pin, key))
+
+        steps = _s(p.get("removal_steps"), 4000) or "The author has not added removal steps yet."
+        material = specs.get("material", "")
+        stmts.append((PART_INSERT, (sku, name, desc, _s(p.get("oem_part_number"), 100), category, steps,
+                                    image, authors.get(author, admin_id), lic, status,
+                                    1 if price > 0 else 0, price, tech, material, json.dumps(specs), sku)))
+        for pin, key in fit_args:
+            stmts.append((COMPAT_INSERT, (pin[0], pin[1], sku, cat["b"][key[0]],
+                                          cat["m"][(key[0], key[1])], cat["g"][key], key[3])))
+        n["parts"] += 1
+        n["fits"] += len(fit_args)
+
+@app.post("/api/admin/import")
+async def admin_import(data: ImportIn, request: Request):
+    env = request.scope["env"]
+    admin = await require_admin(request)
+    errors, stmts, missing = [], [], {}
+    n = {"brands": 0, "models": 0, "generations": 0, "parts": 0, "fits": 0, "skipped": 0}
+    if data.type == "vehicles":
+        cat = await load_cat(env, [_s(b.get("name"), 100) for b in data.brands])
+    else:
+        cat = await load_cat(env)
+
+    if data.type == "vehicles":
+        if vehicle_records(data.brands) > MAX_VEHICLE_RECORDS:
+            raise HTTPException(400, f"Too many records in one request (limit {MAX_VEHICLE_RECORDS}).")
+        plan_vehicles(cat, data.brands, errors, stmts, n)
+    elif data.type == "parts":
+        if len(data.parts) > MAX_PARTS:
+            raise HTTPException(400, f"A parts file can hold at most {MAX_PARTS} parts.")
+        approved = [{"name": _s(c.get("brand"), 100), "models": [{"name": _s(c.get("model"), 100),
+                     "generations": [{"name": _s(c.get("generation"), 100), "start_year": c.get("start_year")}]}]}
+                    for c in data.add_cars]
+        plan_vehicles(cat, approved, errors, stmts, n)
+        await plan_parts(env, cat, data.parts, errors, stmts, n, missing, admin["user_id"])
+    else:
+        raise HTTPException(400, "Unknown file type. Use \"vehicles\" or \"parts\".")
+
+    missing_out = []
+    for item in missing.values():
+        label = car_label(item["brand"], item["model"], item["generation"], item["start_year"]).lower()
+        close = difflib.get_close_matches(label, list(cat["label"]), n=1, cutoff=0.8)
+        missing_out.append({**item, "parts": item["parts"][:10],
+                            "suggestion": cat["label"][close[0]] if close else ""})
+
+    ok = not errors and not missing
+    applied = False
+    if ok and not data.dry_run and stmts:
+        try:
+            await run_batch(env, stmts)
+            applied = True
+        except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            raise HTTPException(500, "The import stopped with an error. Records saved before the error are "
+                                     f"kept, and it is safe to run the same file again. Details: {e}")
+    return {"ok": ok, "dry_run": data.dry_run, "applied": applied, "counts": n,
+            "errors": errors[:50], "error_total": len(errors), "missing": missing_out}
+# ---------- End JSON import ----------
 # ---------- End admin ----------
 SPEC_SCHEMA = {
     "FDM": {"label": "FDM (filament 3D printing)", "fields": [

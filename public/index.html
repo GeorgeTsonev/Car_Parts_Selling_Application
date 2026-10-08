@@ -3,65 +3,43 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>ReFit – parts for cars the manufacturer forgot</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap">
+  <title>ReClip – parts for cars the manufacturer forgot</title>
+  <meta name="theme-color" content="#152D23">
+  <link rel="icon" type="image/svg+xml" href="/ReClip_Logo.svg"> 
   <style>
+    
     /* ---------- Theme variables ---------- */
     :root {
       box-sizing: border-box;
       padding-top: env(safe-area-inset-top, 0px);
       padding-bottom: env(safe-area-inset-bottom, 0px);
 
-      --bg: #eef1f0;
-      --card: #fff;
-      --ink: #16222a;
-      --mut: #58656d;
-      --acc: #0b6e6e;
-      --on: #fff;
-      --line: #d3dadc;
+      --bg: #5D7772;      /* page background */
+      --card: #EAF5F0;    /* cards, inputs: light tint of the accent */
+      --soft: #D5ECE3;    /* image backgrounds */
+      --ink: #152D23;     /* text */
+      --mut: #3C5A4D;     /* muted text on cards */
+      --onbg: #F2FAF7;    /* small text directly on the page background */
+      --acc: #B6E2D3;     /* accent */
+      --on: #152D23;      /* text on accent buttons */
+      --line: #6E8B80;
       --ok: #1f7a45;
-      --mk: #d9480f;
-      --car: #c3ccd2;
-      --win: #e9f0f4;
+      --mk: #d9480f;      /* pin and marker colour */
+      --car: #8DB3A5;
+      --win: #D5ECE3;
     }
 
     html { scroll-padding-top: env(safe-area-inset-top, 0px); }
-
-    @media (prefers-color-scheme: dark) {
-      :root:not([data-theme="light"]) {
-        --bg: #101619;
-        --card: #182025;
-        --ink: #e6ecef;
-        --mut: #9aa8b0;
-        --acc: #3fc1b0;
-        --on: #06201c;
-        --line: #2c373d;
-        --ok: #5cc58a;
-        --mk: #ff8a4c;
-        --car: #46535b;
-        --win: #26323a;
-      }
-    }
-
-    :root[data-theme="dark"] {
-      --bg: #101619;
-      --card: #182025;
-      --ink: #e6ecef;
-      --mut: #9aa8b0;
-      --acc: #3fc1b0;
-      --on: #06201c;
-      --line: #2c373d;
-      --ok: #5cc58a;
-      --mk: #ff8a4c;
-      --car: #46535b;
-      --win: #26323a;
-    }
 
     /* ---------- Base ---------- */
     * { box-sizing: border-box; }
 
     body {
       margin: 0;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
       background: var(--bg);
       color: var(--ink);
       font: 16px/1.55 Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -75,9 +53,29 @@
     }
 
     main {
+      flex: 1;
+      width: 100%;
       max-width: 940px;
       margin: 0 auto;
       padding: 20px;
+    }
+
+    footer {
+      border-top: 1px solid var(--line);
+      background: var(--card);
+      color: var(--mut);
+      font-size: 14px;
+    }
+
+    .footer-content {
+      max-width: 940px;
+      margin: 0 auto;
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 12px;
     }
 
     h1 {
@@ -389,6 +387,43 @@
       align-items: center;
     }
 
+    .profile-forms {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+      gap: 20px;
+      align-items: start;
+      margin: 14px 0;
+    }
+
+    .profile-forms > .card {
+      min-width: 0;
+      margin: 0;
+      grid-template-columns: minmax(0, 1fr);
+      align-content: start;
+    }
+
+    .profile-forms label,
+    .profile-forms fieldset {
+      min-width: 0;
+    }
+
+    .profile-forms input,
+    .profile-forms select,
+    .profile-forms textarea {
+      max-width: 100%;
+    }
+
+    .profile-about textarea {
+      resize: vertical;
+      min-height: 100px;
+      max-height: 320px;
+      overflow: auto;
+    }
+
+    @media (max-width: 800px) {
+      .profile-forms { grid-template-columns: minmax(0, 1fr); }
+    }
+
     /* ---------- Toast & utilities ---------- */
     #toast {
       position: fixed;
@@ -510,16 +545,82 @@
     details.card > summary { cursor: pointer; font-weight: 800; font-size: 22px; }
     .seg { display: flex; gap: 8px; flex-wrap: wrap; }
     .danger { background: #c0392b; color: #fff; }
+    .imptbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .imptbl th, .imptbl td { text-align: left; padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+    /* ---------- ReClip theme overrides-----------------
+    -------------------
+    ---------- 
+    -------------------------------------------------------*/
+
+    a { color: var(--ink); }
+    p a, li a, main > a { text-decoration: underline; text-underline-offset: 2px; }
+    :focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+    header :focus-visible { outline-color: var(--acc); }
+
+    /* Small text sitting directly on the page background (delete this rule to use #152D23 everywhere) */
+    main > p, main > .mut, .hero p { color: var(--onbg); }
+
+    /* Header */
+    header { background: var(--ink); border-bottom-color: var(--ink); }
+    header .logo { color: var(--acc); }
+    .logo-mark { height: 40px; width: 49px; flex: none; --logo-a: var(--acc); --logo-b: #f4c430; }
+    header #nav a:not(.btn) { color: var(--acc); }
+    header .btn { border: 1px solid var(--acc); }
+    header .btn.ghost { color: var(--acc); background: transparent; }
+
+    /* Buttons and controls */
+    button, .btn { border: 1px solid var(--ink); }
+    .ghost { border-color: var(--ink); }
+    .alt { background: var(--ink); color: var(--acc); }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    #toast { color: var(--acc); }
+    .techbtn input:checked + span { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+    .av { border: 2px solid var(--ink); }
+
+    /* Image areas */
+    .pimg, .carcard img, .carcard .noimg, .th.big img { background: var(--soft); }
+    /* ---------- Colour changes, round 2 ---------- */
+
+    /* Footer matches the header */
+    footer { background: var(--ink); color: var(--acc); border-top: 0; }
+    footer a, footer a:visited { color: var(--acc); }
+    footer h2, footer h3, footer p, footer li, footer .mut { color: var(--acc); }
+    footer :focus-visible { outline-color: var(--acc); }
+
+    /* Home page: the "Car brand" and "Model" labels */
+    .pick label { color: #152D2E; }
+
+    /* "Select a car to see its picture here." gets the same colour as the "Preview" heading */
+    #prev .mut { color: var(--ink); }
+
+    /* Part tags (FDM, 3D file, status) get a white background */
+    .tag { background: #fff; }
+    .tag:not([class*="st-"]) { color: var(--ink); }
+
+    /* "Details" labels: OEM number, Technique, License, Author */
+    dl dt { color: #152D2E; }
+
+    /* Reset button on the parts page matches the Search button's height */
+    .filters > button { min-height: 44px; }
   </style>
 </head>
 
 <body>
   <header>
-    <a class="logo" href="#/"><i></i>ReFit</a>
+    <a class="logo" href="#/">
+      <svg class="logo-mark" viewBox="119 16 627 510" aria-hidden="true"><use href="/ReClip_Logo.svg#mark"/></svg>
+      <span>ReClip</span>
+    </a>
     <div id="nav"></div>
   </header>
 
   <main id="app"></main>
+  <footer>
+    <div class="footer-content">
+      <span>&copy; <span id="copyright-year">2026</span> ReClip</span>
+      <a href="#/faq">FAQ</a>
+    </div>
+  </footer>
   <div id="toast" role="status"></div>
 
   <script>
@@ -696,13 +797,12 @@ const thumb = (p, n) => p.img
     ===================================================== */
     function nav() {
       $('#nav').innerHTML =
-            `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
-        `<a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+        `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
         + (me
           ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
           : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
-      }
+    }
 
     function tags(p) {
       return (p.tech ? `<span class="tag">${esc(p.tech)}</span>` : '')
@@ -1373,7 +1473,8 @@ const thumb = (p, n) => p.img
           </div>
         </div>
 
-        <form class="card" onsubmit="return save(event)">
+        <div class="profile-forms">
+        <form class="card profile-about" onsubmit="return save(event)">
           <h2>About you</h2>
           <label>Short bio<textarea name="bio" rows="3">${esc(me.bio)}</textarea></label>
           <label>Contact (phone, forum, social)<input name="phone" value="${esc(me.phone)}"></label>
@@ -1395,6 +1496,7 @@ const thumb = (p, n) => p.img
             <div id="techfields" class="filters"></div>
           </fieldset>
           <label>Part name<input name="name" required></label>
+          <label>OEM number (optional)<input name="oem" type="text" placeholder="e.g. 1J0 867 299"></label>
           <label>Description<textarea name="d" rows="2" required></textarea></label>
           <label>Fits<select name="g">${genOptions}</select></label>
           <label>Category<select name="cat">${catOptions}</select></label>
@@ -1410,6 +1512,7 @@ const thumb = (p, n) => p.img
           </label>
           <button>Publish as draft</button>
         </form>
+        </div>
 
         <h2>My creations</h2>
         ${mine.map(p => row(p)).join('')
@@ -1468,6 +1571,7 @@ const thumb = (p, n) => p.img
         const imageKey = img && img.size ? (await uploadRaw('image', img)).key : '';
         await api('POST', '/api/parts', {
           name: f.get('name'), description: f.get('d'), category: f.get('cat'),
+          oem_part_number: (f.get('oem') || '').trim(),
           license: f.get('lic'), generation_id: +f.get('g'),
           file_key: fileKey, image_key: imageKey, steps: f.get('steps') || '',
           technique: f.get('tech'), specs
@@ -1815,6 +1919,215 @@ const thumb = (p, n) => p.img
       ADM.sel.gen = '';
       adminDo(() => api('DELETE', '/api/admin/generations/' + id), 'Generation deleted. Parts were kept.');
     };
+    /* ===== JSON import (admin) ===== */
+    let IMP = { open: false, data: null, html: '', ok: false, seen: {}, adds: {} };
+    const IMP_CHUNK = 40, IMP_PARTS_MAX = 20;
+    const carKey = c => [c.brand, c.model, c.generation || '', c.start_year].join('|').toLowerCase();
+
+    const IMP_TEMPLATES = {
+      vehicles: {
+        type: 'vehicles', format_version: 1,
+        brands: [
+          { name: 'Volkswagen', logo_url: '',
+            models: [
+              { name: 'Golf', picture_url: '',
+                generations: [
+                  { name: 'Mk4', start_year: 1997, end_year: 2003, photo_url: '' },
+                  { name: 'Mk5', start_year: 2003, end_year: 2008 }
+                ] }
+            ] },
+          { name: 'Seat', models: [ { name: 'Ibiza', generations: [ { start_year: 2002, end_year: 2008 } ] } ] }
+        ]
+      },
+      parts: {
+        type: 'parts', format_version: 1,
+        parts: [
+          { sku: 'GOLF4-CLIP-001', name: 'Door-card clip set', description: 'Replacement clips for the door card.',
+            category: 'trim_clip', license: 'CC-BY-SA-4.0', oem_part_number: '', image_url: '',
+            removal_steps: 'Step one\nStep two', status: 'draft', author: 'username',
+            technique: 'FDM', specs: { material: 'PETG', infill_pct: 40 },
+            printed_price: 6.5,
+            fits: [ { brand: 'Volkswagen', model: 'Golf', generation: 'Mk4', start_year: 1997, x: 42.5, y: 61 } ] }
+        ]
+      }
+    };
+
+    function impTemplate(type) {
+      const blob = new Blob([JSON.stringify(IMP_TEMPLATES[type], null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = type + '-template.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    }
+
+    function impSection() {
+      return `<details class="card" id="adm-imp"${IMP.open ? ' open' : ''} ontoggle="IMP.open = this.open">
+        <summary>Import from JSON</summary>
+        <p class="mut">Use a <b>vehicles</b> file (brands, models, generations) or a <b>parts</b> file (up to ${IMP_PARTS_MAX} parts).
+          Import vehicles first. Records that already exist are skipped, and nothing is ever deleted.</p>
+        <div class="seg">
+          <button type="button" class="ghost" onclick="impTemplate('vehicles')">Download vehicles template</button>
+          <button type="button" class="ghost" onclick="impTemplate('parts')">Download parts template</button>
+        </div>
+        <label>JSON file<input type="file" accept=".json,application/json" onchange="impPick(this)"></label>
+        <div id="imp-out">${IMP.html}</div>
+      </details>`;
+    }
+
+    function impOut(html) {
+      IMP.html = html;
+      const el = $('#imp-out');
+      if (el) el.innerHTML = html;
+    }
+
+    function impChunks(brands, size = IMP_CHUNK) {
+      const chunks = [];
+      let cur = [], n = 0, nb = null;
+      const flush = () => { if (cur.length) chunks.push(cur); cur = []; n = 0; };
+      for (const b of brands) {
+        const start = () => { nb = { ...b, models: [] }; cur.push(nb); n += 1; };
+        start();
+        for (const m of (b.models || [])) {
+          const cost = 1 + ((m && m.generations) || []).length;
+          if (n + cost > size && n > 0) { flush(); start(); }
+          nb.models.push(m);
+          n += cost;
+        }
+      }
+      flush();
+      return chunks;
+    }
+
+    async function impPick(input) {
+      const f = input.files[0];
+      if (!f) return;
+      IMP.seen = {}; IMP.adds = {}; IMP.ok = false; IMP.data = null;
+      try {
+        const d = JSON.parse(await f.text());
+        if (d.type === 'vehicles') {
+          if (!Array.isArray(d.brands)) throw new Error('A vehicles file needs a "brands" list.');
+        } else if (d.type === 'parts') {
+          if (!Array.isArray(d.parts)) throw new Error('A parts file needs a "parts" list.');
+          if (d.parts.length > IMP_PARTS_MAX)
+            throw new Error(`This file has ${d.parts.length} parts. The limit is ${IMP_PARTS_MAX} per file. Split it into several files.`);
+        } else {
+          throw new Error('The file must contain "type": "vehicles" or "type": "parts".');
+        }
+        IMP.data = d;
+      } catch (e) {
+        const msg = e instanceof SyntaxError ? 'This is not valid JSON: ' + e.message : e.message;
+        impOut(`<p class="err">${esc(msg)}</p>`);
+        return;
+      }
+      impRun(true);
+    }
+
+    function impApproved() {
+      return Object.values(IMP.adds).map(c =>
+        ({ brand: c.brand, model: c.model, generation: c.generation || '', start_year: c.start_year }));
+    }
+
+    function impToggle(i) {
+      const key = Object.keys(IMP.seen)[i];
+      if (IMP.adds[key]) delete IMP.adds[key]; else IMP.adds[key] = IMP.seen[key];
+      impRun(true);
+    }
+
+    async function impRun(dry) {
+      const d = IMP.data;
+      if (!d) return;
+      const total = { brands: 0, models: 0, generations: 0, parts: 0, fits: 0, skipped: 0 };
+      const errors = [];
+      let errTotal = 0, done = 0, retries = 0, limit = IMP_CHUNK;
+      const queue = d.type === 'vehicles'
+        ? impChunks(d.brands).map(c => ({ brands: c, size: IMP_CHUNK }))
+        : [{ parts: d.parts, add_cars: impApproved() }];
+      try {
+        while (queue.length) {
+          const job = queue.shift();
+          if (job.brands && job.size > limit) {
+            queue.unshift(...impChunks(job.brands, limit).map(c => ({ brands: c, size: limit })));
+            continue;
+          }
+          impOut(`<p class="mut">${dry ? 'Checking' : 'Importing'} part ${done + 1} of about ${done + queue.length + 1}`
+            + (retries ? ` (${retries} automatic retries with smaller parts)` : '') + '…</p>');
+          const body = job.brands ? { brands: job.brands } : { parts: job.parts, add_cars: job.add_cars };
+          let r;
+          try {
+            r = await api('POST', '/api/admin/import', { type: d.type, dry_run: dry, ...body });
+          } catch (e) {
+            if (job.brands && job.size > 5) {
+              limit = Math.floor(job.size / 2);
+              queue.unshift(...impChunks(job.brands, limit).map(c => ({ brands: c, size: limit })));
+              retries++;
+              continue;
+            }
+            throw e;
+          }
+          for (const k in total) total[k] += (r.counts && r.counts[k]) || 0;
+          errors.push(...r.errors);
+          errTotal += r.error_total;
+          for (const m of r.missing) IMP.seen[carKey(m)] = m;
+          if (!dry && !r.ok) break;
+          done++;
+        }
+      } catch (e) {
+        impOut(`<p class="err">${esc(e.message)}${esc(done ? ' ' + done + ' parts of the file were imported before this error. Run the same file again to continue.' : '')}</p>`);
+        if (done) await load();
+        return;
+      }
+      if (!dry) {
+        IMP.ok = false;
+        await load();
+        impOut(`<p><b>Import finished.</b> ${esc(impSummary(d, total))}</p>`);
+        admin();
+        return;
+      }
+      const pending = Object.keys(IMP.seen).some(k => !IMP.adds[k]);
+      const work = total.brands + total.models + total.generations + total.parts;
+      IMP.ok = !errTotal && !pending && work > 0;
+      impOut(impCheckHtml(d, total, errors, errTotal, pending, work));
+    }
+
+    function impSummary(d, t) {
+      const bits = [];
+      if (t.brands) bits.push(t.brands + ' new brands');
+      if (t.models) bits.push(t.models + ' new models');
+      if (t.generations) bits.push(t.generations + ' new generations');
+      if (t.parts) bits.push(t.parts + ' new parts with ' + t.fits + ' car fitments');
+      if (t.skipped) bits.push(t.skipped + ' already existed and were skipped');
+      return bits.join(', ') || 'Nothing new.';
+    }
+
+    function impCheckHtml(d, total, errors, errTotal, pending, work) {
+      let html = `<p><b>${d.type === 'vehicles' ? 'Vehicles' : 'Parts'} file checked.</b> ${esc(impSummary(d, total))}`
+        + (d.type === 'vehicles' ? ' <span class="mut">(counts are approximate for large files)</span>' : '') + '</p>';
+      if (errTotal) {
+        html += `<p class="err">${errTotal} problem${errTotal === 1 ? '' : 's'} to fix in the file`
+          + (errTotal > errors.length ? ` (showing the first ${errors.length})` : '') + ':</p><ul>'
+          + errors.map(e => `<li>${esc(e)}</li>`).join('') + '</ul>';
+      }
+      const seen = Object.entries(IMP.seen);
+      if (seen.length) {
+        html += `<p><b>Cars not found in the database.</b> If a name is a typo, fix the file and choose it again.
+          Otherwise tick the cars you want to add. They are created without photos and you can edit them later.</p>
+          <table class="imptbl"><tr><th>Car in file</th><th>Used by parts</th><th>Closest existing car</th><th></th></tr>`
+          + seen.map(([k, c], i) => `<tr>
+            <td>${esc(c.brand + ' ' + c.model + ' ' + (c.generation || '') + ' (' + c.start_year + ')')}</td>
+            <td>${esc(c.parts.join(', '))}</td>
+            <td>${c.suggestion ? esc(c.suggestion) : '<span class="mut">none</span>'}</td>
+            <td><label style="display:flex;gap:6px;align-items:center">
+              <input type="checkbox" style="width:auto" ${IMP.adds[k] ? 'checked' : ''} onchange="impToggle(${i})"> Add this car</label></td>
+          </tr>`).join('') + '</table>';
+      }
+      if (!work && !errTotal && !pending) html += '<p class="mut">Nothing new to import.</p>';
+      html += `<button ${IMP.ok ? '' : 'disabled'} onclick="impRun(false)">Import</button>`
+        + (IMP.ok ? '' : ' <span class="mut">Fix the problems above to enable the import.</span>');
+      return html;
+    }
+
+
     function admin() {
       if (!isAdmin) return home();
       const brandFilter = '<option value="">Any brand</option>'
@@ -1827,7 +2140,7 @@ const thumb = (p, n) => p.img
         ${admDetails('brand', 'Brands')}
         ${admDetails('model', 'Models')}
         ${admDetails('gen', 'Generations')}
-
+        ${impSection()}
         <h2>Find parts</h2>
         <form id="af" class="card filters" oninput="adminFilter(event)" onsubmit="return false">
           <label>Name<input name="name" value="${esc(AF.name)}" placeholder="part name"></label>
@@ -1889,6 +2202,31 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Routing & startup
        ===================================================== */
+    function faq() {
+      view(`
+        <h1>Frequently asked questions</h1>
+        <section class="card">
+          <h2>What is ReClip?</h2>
+          <p>ReClip helps you find replacement parts for older cars. Browse by car or search by part name or OEM number. Parts may have a downloadable 3D file, a printed version to buy, or both.</p>
+        </section>
+        <section class="card">
+          <h2>How do I share a part?</h2>
+          <p>Create an account or log in, then open your <a href="#/profile">profile</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and car fitment, and upload an STL, 3MF or STEP file. Your part is published as a draft.</p>
+        </section>
+        <section class="card">
+          <h2>Do I need an OEM number?</h2>
+          <p>No. The OEM number is optional. If you know the original manufacturer's part number, include it to help people find your part. Otherwise, leave the field blank.</p>
+        </section>
+        <section class="card">
+          <h2>How do I find parts for my car?</h2>
+          <p>Choose a brand and model on the home page, or use the brand, model and generation filters on the <a href="#/parts">all parts page</a>. Each part's details list the cars it fits.</p>
+        </section>
+        <section class="card">
+          <h2>Where can I see printing instructions and the license?</h2>
+          <p>Open a part's page to see its manufacturing details, removal steps and license. The available details depend on what the author has provided.</p>
+        </section>`);
+    }
+
     let PF = { b: '', m: '', g: '' };   // brand, model, generation filters
 
     function partsPage() {
@@ -1899,7 +2237,7 @@ const thumb = (p, n) => p.img
           <label>Brand<select id="pf-b" onchange="partsFilter('b', this.value)"></select></label>
           <label>Model<select id="pf-m" onchange="partsFilter('m', this.value)"></select></label>
           <label>Generation<select id="pf-g" onchange="partsFilter('g', this.value)"></select></label>
-          <button type="button" class="ghost" onclick="partsReset()">Reset</button>
+          <button type="button" onclick="partsReset()">Reset</button>
         </div>
         <p class="mut" id="pf-count"></p>
         <div id="pf-list"></div>`);
@@ -1956,12 +2294,14 @@ const thumb = (p, n) => p.img
         profile: profile,
         cart:    cartv,
         parts:   partsPage,
+        faq:     faq,
         admin:   admin
       };
       (routes[page] || home)();
     }
 
   async function init() {
+    $('#copyright-year').textContent = new Date().getFullYear();
     addEventListener('hashchange', route);
     nav();
     view('<p class="mut">Loading catalog…</p>');
