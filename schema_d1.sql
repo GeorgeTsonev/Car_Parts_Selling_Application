@@ -15,7 +15,9 @@ CREATE TABLE Users (
 CREATE TABLE Brands (
   brand_id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL UNIQUE,
-  logo_url TEXT
+  logo_url TEXT,
+  created_by INTEGER REFERENCES Users(user_id) ON DELETE SET NULL,
+  created_at TEXT
 );
 
 CREATE TABLE Models (
@@ -23,7 +25,9 @@ CREATE TABLE Models (
   brand_id INTEGER NOT NULL REFERENCES Brands(brand_id),
   name TEXT NOT NULL,
   description TEXT,
-  picture_url TEXT
+  picture_url TEXT,
+  created_by INTEGER REFERENCES Users(user_id) ON DELETE SET NULL,
+  created_at TEXT
 );
 
 CREATE TABLE Vehicle_Generations (
@@ -32,7 +36,9 @@ CREATE TABLE Vehicle_Generations (
   generation_name TEXT,
   start_year INTEGER NOT NULL,
   end_year INTEGER,
-  overview_image_url TEXT
+  overview_image_url TEXT,
+  created_by INTEGER REFERENCES Users(user_id) ON DELETE SET NULL,
+  created_at TEXT
 );
 
 CREATE TABLE Parts (

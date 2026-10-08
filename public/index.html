@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>ReClip – parts for cars the manufacturer forgot</title>
   <meta name="theme-color" content="#152D23">
-  <link rel="icon" type="image/svg+xml" href="/ReClip_Logo.svg"> 
+  <link rel="icon" type="image/jpeg" href="/ReClip_Logo.png">
   <style>
     
     /* ---------- Theme variables ---------- */
@@ -563,11 +563,10 @@
     /* Header */
     header { background: var(--ink); border-bottom-color: var(--ink); }
     header .logo { color: var(--acc); }
-    .logo-mark { height: 40px; width: 49px; flex: none; --logo-a: var(--acc); --logo-b: #f4c430; }
     header #nav a:not(.btn) { color: var(--acc); }
     header .btn { border: 1px solid var(--acc); }
-    header .btn.ghost { color: var(--acc); background: transparent; }
-
+    .logo-mark { display: block; flex: none; height: 44px; width: auto; }
+    .logo-mark img { display: block; height: 100%; width: auto; }
     /* Buttons and controls */
     button, .btn { border: 1px solid var(--ink); }
     .ghost { border-color: var(--ink); }
@@ -602,17 +601,81 @@
 
     /* Reset button on the parts page matches the Search button's height */
     .filters > button { min-height: 44px; }
+    .pgrid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .profile-parts { min-width: 0; align-self: start; }
+    /* Separators in the top menu */
+    #nav { gap: 0; }
+    #nav > * { position: relative; }
+    #nav > * + * { margin-left: 28px; }
+    #nav > * + *::before {
+      content: ""; position: absolute; left: -14px; top: 50%;
+      width: 2px; height: 22px; transform: translateY(-50%);
+      background: var(--acc); border-radius: 1px; pointer-events: none;
+    }
+    @media (max-width: 640px) {
+      #nav > * + * { margin-left: 20px; }
+      #nav > * + *::before { left: -10px; height: 18px; }
+    }
+        /* ---------- Mobile menu ---------- */
+    header .nav-toggle { display: none; }
+    header .nav-toggle .cross { display: none; }
+    header.open .nav-toggle .bars { display: none; }
+    header.open .nav-toggle .cross { display: inline; }
+    @media (max-width: 640px) {
+      header .nav-toggle {
+        display: inline-flex; align-items: center; justify-content: center;
+        width: 44px; height: 44px; padding: 0; margin-left: auto;
+        background: transparent; color: var(--acc);
+        border: 1px solid var(--acc); border-radius: 8px;
+      }
+      header #nav {
+        display: none; position: absolute; top: 100%; left: 0; right: 0;
+        flex-direction: column; align-items: stretch; gap: 0;
+        padding: 8px 20px 16px; background: var(--ink);
+        border-top: 1px solid rgba(182, 226, 211, .3);
+      }
+      header.open #nav { display: flex; }
+      header #nav > * + * { margin-left: 0; margin-top: 4px; }
+      header #nav > * + *::before { display: none; }
+      header #nav a:not(.btn) { padding: 12px 0; }
+      header #nav .btn { text-align: center; margin-top: 8px; }
+    }
+    /* ---------- 3D preview on the part page ---------- */
+    .gal { display: grid; gap: 10px; align-content: start; min-width: 0; }
+    .gal [hidden] { display: none !important; }
+    .galtabs { display: flex; gap: 8px; flex-wrap: wrap; }
+    .part-preview {
+      position: relative; width: 100%; max-width: 360px; aspect-ratio: 1 / 1;
+      overflow: hidden; border-radius: 10px; background: var(--soft);
+    }
+    .part-preview canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+    .part-preview-status {
+      position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+      max-width: calc(100% - 16px); padding: 6px 10px; border-radius: 10px;
+      background: rgba(234, 245, 240, .92); color: var(--ink);
+      font-size: 12px; line-height: 1.4; text-align: center; pointer-events: none;
+    }
+    header #nav a.btn.ghost { background: transparent; color: var(--acc); border: 1px solid var(--acc); }
+    header #nav a.btn:not(.ghost) { background: var(--acc); color: var(--ink); border: 1px solid var(--acc); }
   </style>
 </head>
 
 <body>
   <header>
     <a class="logo" href="#/">
-      <svg class="logo-mark" viewBox="119 16 627 510" aria-hidden="true"><use href="/ReClip_Logo.svg#mark"/></svg>
+      <span class="logo-mark"><img src="/ReClip_Logo.png" alt=""></span>
       <span>ReClip</span>
     </a>
+    <button class="nav-toggle" type="button" aria-label="Open menu" aria-expanded="false" aria-controls="nav"
+            onclick="setMenu(!document.querySelector('header').classList.contains('open'))">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"
+           stroke-linecap="round" aria-hidden="true">
+        <path class="bars" d="M4 6h16M4 12h16M4 18h16"/>
+        <path class="cross" d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
     <div id="nav"></div>
-  </header>
+</header>
 
   <main id="app"></main>
   <footer>
@@ -795,14 +858,29 @@ const thumb = (p, n) => p.img
 /* =====================================================
    Shared UI fragments
     ===================================================== */
+    function setMenu(open) {
+      const h = document.querySelector('header');
+      h.classList.toggle('open', open);
+      const b = h.querySelector('.nav-toggle');
+      b.setAttribute('aria-expanded', open ? 'true' : 'false');
+      b.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
+    }
+    document.addEventListener('click', e => {
+      const h = document.querySelector('header');
+      if (!h.classList.contains('open')) return;
+      if (e.target.closest('#nav a') || !e.target.closest('header')) setMenu(false);
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') setMenu(false); });
+    addEventListener('resize', () => { if (innerWidth > 640) setMenu(false); });
+    addEventListener('hashchange', () => setMenu(false));
     function nav() {
       $('#nav').innerHTML =
-        `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
-        + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
-        + (me
-          ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
-          : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
-    }
+      `<a href="#/">Home</a><a href="#/cars">Cars</a><a href="#/parts">Parts</a><a href="#/post">Post</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+    +   (isAdmin ? '<a href="#/admin">Admin</a>' : '')
+    +   (me
+        ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
+        : `<a class="btn ghost" href="#/login">Log in</a><a class="btn" href="#/signup">Sign up</a>`);
+}
 
     function tags(p) {
       return (p.tech ? `<span class="tag">${esc(p.tech)}</span>` : '')
@@ -861,6 +939,12 @@ const thumb = (p, n) => p.img
        Home & search
        ===================================================== */
     function home() {
+      view(`<h1>Home</h1>
+            <h1>A cracked plastic clip shouldn't scrap a good car.</h1>
+            <p>Find parts discontinued for cars over ten years old. Buy them printed, or download the 3D file and print them yourself.</p>
+          `);
+    }
+    function carsPage() {
       const brandOptions = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
       const emptyNote = B.length
         ? ''
@@ -869,9 +953,6 @@ const thumb = (p, n) => p.img
 
       view(`
         <section class="hero">
-          <h1>A cracked plastic clip shouldn't scrap a good car.</h1>
-          <p>Find parts discontinued for cars over ten years old. Buy them printed, or download the 3D file and print them yourself.</p>
-
           <div class="pick">
             <label>Car brand
               <select id="sb" onchange="fillM()">
@@ -884,7 +965,7 @@ const thumb = (p, n) => p.img
 
           ${emptyNote}
           ${sform()}
-
+          <p class="mut">Can't find your car? <a href="#/post/car">Add it here</a>.</p>
           <div class="card prev">
             <h2>Preview</h2>
             <div id="prev"><p class="mut">Select a car to see its picture here.</p></div>
@@ -959,7 +1040,7 @@ const thumb = (p, n) => p.img
        ===================================================== */
     function car(id, edit) {
       const gen = G.find(x => x.id == id);
-      if (!gen) return home();
+      if (!gen) return carsPage();
       if (edit) return carEdit(gen, edit.focus);
 
       const parts = all().filter(p => p.g.includes(gen.id));
@@ -994,7 +1075,7 @@ const thumb = (p, n) => p.img
       }
 
       view(`
-        <a href="#/">← Change car</a>
+        <a href="#/cars">← Change car</a>
         <div class="carhead">
           <h1>${esc(gname(id))}</h1>
           ${isAdmin ? `<a class="btn ghost" href="#/car/${id}/edit">Edit pins</a>` : ''}
@@ -1263,9 +1344,102 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Part page
        ===================================================== */
+    /* ===== 3D preview on the part page ===== */
+    const PV_FORMATS = ['stl', '3mf'];   // formats the viewer can read (STEP is not supported)
+    const PV_WARN_MB = 10;               // ask before loading bigger files
+    let PV = { viewer: null, partId: null, token: 0 };
+
+    function previewFile(p) {
+      const f = p.file;
+      if (!f || !f.url) return null;
+      const ext = String(f.file_name || '').split('.').pop().toLowerCase();
+      return PV_FORMATS.includes(ext) ? f : null;
+    }
+
+    function galleryHtml(p) {
+      const f = previewFile(p);
+      const buttons = !f ? '' : p.img
+        ? `<div class="galtabs">
+            <button type="button" id="gal-b-photo" onclick="galShow(${p.id}, 'photo')">Photo</button>
+            <button type="button" class="ghost" id="gal-b-3d" onclick="galShow(${p.id}, '3d')">View in 3D</button>
+          </div>`
+        : `<div class="galtabs">
+            <button type="button" id="gal-b-3d" onclick="galShow(${p.id}, '3d')">View in 3D</button>
+          </div>`;
+      return `<div class="gal">
+          <div class="th big" id="gal-photo">${thumb(p)}</div>
+          <div class="part-preview" id="gal-3d" hidden>
+            <canvas id="gal-canvas" aria-label="Interactive 3D preview of ${esc(p.name)}"></canvas>
+            <div id="gal-status" class="part-preview-status" role="status"></div>
+          </div>
+          ${buttons}
+        </div>`;
+    }
+
+    function loadScriptOnce(src) {
+      return new Promise((resolve, reject) => {
+        if (window.PartPreview) return resolve();
+        const el = document.createElement('script');
+        el.src = src;
+        el.onload = resolve;
+        el.onerror = () => reject(new Error('Could not load the 3D viewer.'));
+        document.head.appendChild(el);
+      });
+    }
+
+    function destroyPreview() {
+      PV.token++;
+      if (PV.viewer) { PV.viewer.destroy(); PV.viewer = null; }
+      PV.partId = null;
+    }
+
+    async function galShow(id, mode) {
+      const p = find(id), f = p && previewFile(p);
+      const photo = $('#gal-photo'), box = $('#gal-3d'), b3 = $('#gal-b-3d'), bp = $('#gal-b-photo');
+      if (!f || !photo || !box || !b3) return;
+
+      if (mode === 'photo') {
+        box.hidden = true; photo.hidden = false;
+        if (bp) bp.classList.remove('ghost');
+        b3.classList.add('ghost');
+        return;
+      }
+
+      const loaded = PV.viewer && PV.partId === id;
+      if (!loaded) {
+        const mb = (f.file_size_bytes || 0) / 1048576;
+        if (mb > PV_WARN_MB && !confirm(`This file is ${mb.toFixed(1)} MB. The preview may be slow on some devices. Continue?`)) return;
+      }
+      photo.hidden = true; box.hidden = false;
+      if (bp) { bp.classList.add('ghost'); b3.classList.remove('ghost'); } else b3.hidden = true;
+      if (loaded) return;
+
+      const token = ++PV.token, status = $('#gal-status');
+      status.textContent = 'Loading the 3D viewer…';
+      try {
+        await loadScriptOnce('/part-preview.js');
+        if (token !== PV.token) return;
+        PV.viewer = PartPreview.create($('#gal-canvas'), {
+          statusElement: status,
+          background: '#D5ECE3',
+          color: [61, 105, 92],
+          scale: 0.65,
+          maxTriangles: matchMedia('(pointer: coarse)').matches ? 12000 : 24000
+        });
+        PV.partId = id;
+        await PV.viewer.loadUrl(f.url, { fileName: f.file_name });
+      } catch (e) {
+        if (token !== PV.token) return;
+        destroyPreview();
+        box.hidden = true; photo.hidden = false;
+        if (bp) { bp.classList.remove('ghost'); b3.classList.add('ghost'); } else b3.hidden = false;
+        toast(e.message === 'Failed to fetch' ? 'Could not download the file for the 3D preview.' : e.message);
+      }
+    }
     function part(id) {
+      destroyPreview();
       const p = find(id);
-      if (!p) return home();
+      if (!p) return carsPage();
 
       const downloadBtn = p.k != 'buy'
         ? `<button onclick="dl(${p.id})">Download 3D file</button>` : '';
@@ -1293,7 +1467,7 @@ const thumb = (p, n) => p.img
         <a href="javascript:history.back()">← Back</a>
 
         <div class="pd">
-          <div class="th big">${thumb(p)}</div>
+          ${galleryHtml(p)}
           <div>
             <h1>${esc(p.name)}</h1>
             <p>${esc(p.d)}</p>
@@ -1369,7 +1543,7 @@ const thumb = (p, n) => p.img
         ? rows + `<p class="tot">Total ${money(total)}</p>
             <label>Shipping address<textarea id="ship" rows="3"></textarea></label>
             <button onclick="checkout()">Place order</button>`
-        : '<p class="mut">Your cart is empty. <a href="#/">Find a part</a></p>'}`);
+        : '<p class="mut">Your cart is empty. <a href="#/parts">Find a part</a></p>'}`);
     }
 
     async function checkout() {
@@ -1436,15 +1610,6 @@ const thumb = (p, n) => p.img
       nav();
       location.hash = '#/';
     }
-    async function sync() {
-      const { id, ...data } = me;
-      try {
-        await db.collection('users').doc(uid).set(data);
-        U[uid] = data;
-      } catch (e) {
-        toast('Could not save your profile.');
-      }
-    }
 
     function profile() {
       if (!me) {
@@ -1452,14 +1617,11 @@ const thumb = (p, n) => p.img
         return (location.hash = '#/login');
       }
 
-      const mine = P.filter(p => p.owner == uid);
+      const mine = P.filter(p => p.owner == me.id);
 
       const avatar = me.pic
         ? `<img src="${me.pic}" alt="Profile picture">`
         : esc(me.name[0].toUpperCase());
-
-      const genOptions = G.map(g => `<option value="${g.id}">${esc(gname(g.id))}</option>`).join('');
-      const catOptions = Object.keys(CAT).map(c => `<option>${c}</option>`).join('');
 
       view(`
         <div class="card prof">
@@ -1473,6 +1635,7 @@ const thumb = (p, n) => p.img
           </div>
         </div>
 
+
         <div class="profile-forms">
         <form class="card profile-about" onsubmit="return save(event)">
           <h2>About you</h2>
@@ -1481,42 +1644,20 @@ const thumb = (p, n) => p.img
           <button>Save profile</button>
         </form>
 
-        <form class="card" onsubmit="return up(event)">
-          <h2>Share a 3D part</h2>
-          <fieldset class="tech">
-            <legend>Manufacturing technique</legend>
-            <div class="techbtns">
-              ${['CNC', 'FDM', 'SLS', 'SLA'].map(t => `
-                <label class="techbtn">
-                  <input type="radio" name="tech" value="${t}" required onchange="techChanged(this.value)">
-                  <span>${t}</span>
-                </label>`).join('')}
-            </div>
-            <p class="mut" id="techname">Choose how this part is made.</p>
-            <div id="techfields" class="filters"></div>
-          </fieldset>
-          <label>Part name<input name="name" required></label>
-          <label>OEM number (optional)<input name="oem" type="text" placeholder="e.g. 1J0 867 299"></label>
-          <label>Description<textarea name="d" rows="2" required></textarea></label>
-          <label>Fits<select name="g">${genOptions}</select></label>
-          <label>Category<select name="cat">${catOptions}</select></label>
-          <label>License
-            <select name="lic">
-              <option>CC-BY-SA-4.0</option>
-              <option>CC-BY-4.0</option>
-              <option>CC0</option>
-            </select>
-          </label>
-          <label>3D file (STL, 3MF or STEP)
-            <input name="file" type="file" accept=".stl,.3mf,.step,.stp" required>
-          </label>
-          <button>Publish as draft</button>
-        </form>
-        </div>
 
-        <h2>My creations</h2>
-        ${mine.map(p => row(p)).join('')
-          || '<p class="mut">Nothing uploaded yet. Share your first part above.</p>'}`);
+        <div class="profile-parts">
+          <div class="carhead">
+            <h2>My parts</h2>
+            <a class="btn" href="#/post">Post a part</a>
+          </div>
+          ${mine.length
+            ? `<div class="pgrid two">${mine.slice()
+                .sort((a, b) => (b.added || '').localeCompare(a.added || '') || b.id - a.id)
+                .map(p => pcard(p)).join('')}</div>`
+            : '<p class="mut">You have not posted any parts yet. <a href="#/post">Post your first part</a>.</p>'}
+        </div>
+        </div>
+      `);
     }
 
     async function save(e) {
@@ -1580,7 +1721,7 @@ const thumb = (p, n) => p.img
         toast('Published as a draft.');
       } catch (x) { toast(x.message); }
       btn.disabled = false;
-      profile();
+      route();
       return false;
     }
     
@@ -1717,6 +1858,18 @@ const thumb = (p, n) => p.img
             <label><span>Sold as printed part</span><input name="phys" type="checkbox" style="width:auto"${p.k != 'print' ? ' checked' : ''}></label>
             <button>Save details</button>
           </form>
+
+          <div class="aform">
+            <h3>Replace files (3D file: ${p.file ? esc(p.file.file_name) : 'none yet'})</h3>
+            <label>New picture (JPEG, PNG or WebP)
+              <input id="rp-image-${p.id}" type="file" accept="image/jpeg,image/png,image/webp,.jfif">
+            </label>
+            <button type="button" onclick="adminReplace(${p.id}, 'image')">Upload picture</button>
+            <label>New 3D file (STL, 3MF or STEP)
+              <input id="rp-model-${p.id}" type="file" accept=".stl,.3mf,.step,.stp">
+            </label>
+            <button type="button" onclick="adminReplace(${p.id}, 'model')">Upload 3D file</button>
+          </div>
         </div>`;
     }
 
@@ -1795,7 +1948,7 @@ const thumb = (p, n) => p.img
           <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
           <label>Model picture (optional)
             <input name="pic" data-url placeholder="https://... or choose a file below">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
           </label>
           <button>Add model</button>
         </form>`,
@@ -1808,7 +1961,7 @@ const thumb = (p, n) => p.img
           <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
           <label>Generation photo (optional)
             <input name="img" data-url placeholder="https://... or choose a file below">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
           </label>
           <button>Add generation</button>
         </form>`
@@ -1837,7 +1990,7 @@ const thumb = (p, n) => p.img
             <label>Model name<input name="n" value="${esc(m.name)}" required></label>
             <label>Model picture
               <input name="pic" data-url value="${esc(m.picture_url || '')}" placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+              <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
             </label>
             <button>Save changes</button>
             <button type="button" class="danger" onclick="delM()">Delete model</button>
@@ -1866,7 +2019,7 @@ const thumb = (p, n) => p.img
             <label>End year (optional)<input name="e" type="number" min="1900" max="2100" value="${esc(g.end_year || '')}"></label>
             <label>Generation photo
               <input name="img" data-url value="${esc(g.overview_image_url || '')}" placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+              <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
             </label>
             <button>Save changes</button>
             <button type="button" class="danger" onclick="delG()">Delete generation</button>
@@ -2127,6 +2280,166 @@ const thumb = (p, n) => p.img
       return html;
     }
 
+    /* ===== Post page: share a part + add a car, all in one place ===== */
+    let PT = { tab: 'part' };            // which tab is open on #/post
+    let UC = { brand: '', model: '' };   // remembers the last car choices
+
+    function partFormHtml() {
+      const genOptions = '<option value="">Choose the car it fits</option>'
+        + G.map(g => `<option value="${g.id}">${esc(gname(g.id))}</option>`).join('');
+      const catOptions = Object.keys(CAT).map(c => `<option>${c}</option>`).join('');
+      return `
+        <form class="card" onsubmit="return up(event)">
+          <h2>Share a 3D part</h2>
+          <fieldset class="tech">
+            <legend>Manufacturing technique</legend>
+            <div class="techbtns">
+              ${['CNC', 'FDM', 'SLS', 'SLA'].map(t => `
+                <label class="techbtn">
+                  <input type="radio" name="tech" value="${t}" required onchange="techChanged(this.value)">
+                  <span>${t}</span>
+                </label>`).join('')}
+            </div>
+            <p class="mut" id="techname">Choose how this part is made.</p>
+            <div id="techfields" class="filters"></div>
+          </fieldset>
+          <label>Part name<input name="name" required></label>
+          <label>Description<textarea name="d" rows="2" required></textarea></label>
+          <label>Fits<select name="g" required>${genOptions}</select></label>
+          <p class="mut" style="margin:0">Car missing from the list? <a href="#/post/car">Add it first</a>.</p>
+          <label>Category<select name="cat">${catOptions}</select></label>
+          <label>License
+            <select name="lic">
+              <option>CC-BY-SA-4.0</option>
+              <option>CC-BY-4.0</option>
+              <option>CC0</option>
+            </select>
+          </label>
+          <label>3D file (STL, 3MF or STEP)
+            <input name="file" type="file" accept=".stl,.3mf,.step,.stp" required>
+          </label>
+          <button>Publish as draft</button>
+        </form>`;
+    }
+
+    function carFormsHtml() {
+      const o = (v, label, cur) =>
+        `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+      const brands = '<option value="">Choose a brand</option>' + B.map(b => o(b.id, b.n, UC.brand)).join('');
+      const models = '<option value="">Choose a model</option>' + M.map(m =>
+        o(m.model_id, (B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name, UC.model)).join('');
+      const photo = `<label>Photo of the car (optional)
+          <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="carPic(this)">
+          <input type="hidden" name="image_key">
+          <span class="mut" data-status>No photo selected</span>
+        </label>`;
+      return `
+        <p>Can't find your car in the list? Add its brand, model and generation here, in that order.
+          New entries appear for everyone straight away. You can add entries but not change them later, so check the details first.
+          Only upload photos you took yourself.</p>
+
+        <div class="card">
+          <h2>1. Brand</h2>
+          <form class="aform" onsubmit="return addBrandU(event)">
+            <label>Brand name<input name="n" required minlength="2" maxlength="60" placeholder="e.g. Volkswagen"></label>
+            <button>Add brand</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>2. Model</h2>
+          <form class="aform" onsubmit="return addModelU(event)">
+            <label>Brand<select name="b" required>${brands}</select></label>
+            <label>Model name<input name="n" required maxlength="60" placeholder="e.g. Golf"></label>
+            ${photo}
+            <button>Add model</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>3. Generation</h2>
+          <form class="aform" onsubmit="return addGenU(event)">
+            <label>Model<select name="m" required>${models}</select></label>
+            <label>Generation name (optional)<input name="n" maxlength="60" placeholder="e.g. Mk4"></label>
+            <label>Start year<input name="s" type="number" min="1900" max="2100" required placeholder="1997"></label>
+            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
+            ${photo}
+            <button>Add generation</button>
+          </form>
+        </div>`;
+    }
+
+    function postPage(tab) {
+      if (!me) return gate();
+      if (tab) PT.tab = tab === 'car' ? 'car' : 'part';
+      view(`
+        <h1>Post</h1>
+        <div class="seg">
+          <button type="button" class="${PT.tab === 'part' ? '' : 'ghost'}" onclick="postTab('part')">Share a 3D part</button>
+          <button type="button" class="${PT.tab === 'car' ? '' : 'ghost'}" onclick="postTab('car')">Add a car</button>
+        </div>
+        ${PT.tab === 'car' ? carFormsHtml() : partFormHtml()}`);
+    }
+
+    function postTab(t) { PT.tab = t; postPage(); }
+
+    async function carPic(inp) {
+      const f = inp.files[0];
+      const label = inp.closest('label');
+      const key = label.querySelector('[name=image_key]');
+      const status = label.querySelector('[data-status]');
+      key.value = '';
+      if (!f) { status.textContent = 'No photo selected'; return; }
+      status.textContent = 'Uploading…';
+      try {
+        const u = await uploadRaw('image', f);
+        key.value = u.key;
+        status.textContent = 'Photo uploaded: ' + f.name;
+      } catch (e) {
+        status.textContent = e.message;
+        inp.value = '';
+      }
+    }
+
+    async function carAdd(e, url, body, okMsg, after) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      try {
+        const r = await api('POST', url, body);
+        await load();
+        const go = after(r.id);
+        toast(okMsg);
+        if (go) location.hash = go; else postPage();
+      } catch (x) {
+        toast(x.message);
+        btn.disabled = false;
+      }
+    }
+
+    const addBrandU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/brands', { name: f.get('n') }, 'Brand added. Now add its models.',
+        id => { UC.brand = id; });
+      return false;
+    };
+
+    const addModelU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/models', { brand_id: +f.get('b'), name: f.get('n'), image_key: f.get('image_key') || '' },
+        'Model added. Now add its generation.',
+        id => { UC.brand = +f.get('b'); UC.model = id; });
+      return false;
+    };
+
+    const addGenU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/generations', {
+        model_id: +f.get('m'), generation_name: f.get('n') || '', start_year: +f.get('s'),
+        end_year: +(f.get('e') || 0), image_key: f.get('image_key') || ''
+      }, 'Generation added.', id => '#/car/' + id);
+      return false;
+    };
 
     function admin() {
       if (!isAdmin) return home();
@@ -2188,7 +2501,20 @@ const thumb = (p, n) => p.img
       try { await fn(); await load(); toast(okMsg); } catch (e) { toast(e.message); }
       admin();
     }
-    
+    const adminReplace = (id, kind) => {
+      const inp = $(`#rp-${kind}-${id}`), f = inp && inp.files[0];
+        if (!f) return toast('Choose a file first.');
+        const isPic = kind === 'image';
+        if (!confirm(isPic
+          ? 'Replace this part’s picture?'
+          : 'Replace this part’s 3D file? The old file will be deleted.')) return;
+        adminDo(async () => {
+          const u = await uploadRaw(kind, f);
+          await api('PUT', `/api/admin/parts/${id}/${isPic ? 'image' : 'file'}`,
+          isPic ? { image_key: u.key } : { file_key: u.key });
+      }, isPic ? 'Picture updated.' : '3D file updated.');
+    };
+
     async function adminPic(inp) {
       const f = inp.files[0];
       if (!f) return;
@@ -2202,7 +2528,7 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Routing & startup
        ===================================================== */
-    function faq() {
+      function faq() {
       view(`
         <h1>Frequently asked questions</h1>
         <section class="card">
@@ -2211,7 +2537,15 @@ const thumb = (p, n) => p.img
         </section>
         <section class="card">
           <h2>How do I share a part?</h2>
-          <p>Create an account or log in, then open your <a href="#/profile">profile</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and car fitment, and upload an STL, 3MF or STEP file. Your part is published as a draft.</p>
+          <p>Create an account or log in, then open the <a href="#/post">Post page</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and the car it fits, and upload an STL, 3MF or STEP file. Your part is published as a draft. You can see all your parts on your <a href="#/profile">profile</a>.</p>
+        </section>
+        <section class="card">
+          <h2>My car is not in the list. What can I do?</h2>
+          <p>Open the <a href="#/post/car">Add a car</a> tab on the Post page and add the brand, model and generation, in that order. You can add a photo you took yourself. New cars appear for everyone straight away. You can add entries but not change them afterwards, so check the details first.</p>
+        </section>
+        <section class="card">
+          <h2>What do the status labels mean?</h2>
+          <p>A new part starts as <b>Draft</b>. It can later be marked <b>Community tested</b> or <b>Verified fit</b> once its fit has been confirmed, or <b>Flagged</b> if there is a problem with it.</p>
         </section>
         <section class="card">
           <h2>Do I need an OEM number?</h2>
@@ -2219,7 +2553,7 @@ const thumb = (p, n) => p.img
         </section>
         <section class="card">
           <h2>How do I find parts for my car?</h2>
-          <p>Choose a brand and model on the home page, or use the brand, model and generation filters on the <a href="#/parts">all parts page</a>. Each part's details list the cars it fits.</p>
+          <p>Choose a brand and model on the <a href="#/cars">Cars page</a>, or use the brand, model and generation filters on the <a href="#/parts">all parts page</a>. Each part's details list the cars it fits.</p>
         </section>
         <section class="card">
           <h2>Where can I see printing instructions and the license?</h2>
@@ -2283,6 +2617,7 @@ const thumb = (p, n) => p.img
       const [, page, arg, mode, extra] = location.hash.split('/');
       const param = decodeURIComponent(arg || '');
       window.scrollTo(0, 0);
+      destroyPreview();
       if (EDIT) { flushSaves(); EDIT = null; }
 
       const routes = {
@@ -2295,6 +2630,8 @@ const thumb = (p, n) => p.img
         cart:    cartv,
         parts:   partsPage,
         faq:     faq,
+        post:    () => postPage(param),
+        cars:    carsPage,
         admin:   admin
       };
       (routes[page] || home)();
