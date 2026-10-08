@@ -797,7 +797,7 @@ const thumb = (p, n) => p.img
     ===================================================== */
     function nav() {
       $('#nav').innerHTML =
-        `<a href="#/parts">Parts</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
+        `<a href="#/parts">Parts</a><a href="#/post">Post</a><a href="#/cart">Cart${cart.length ? ' (' + cart.length + ')' : ''}</a>`
         + (isAdmin ? '<a href="#/admin">Admin</a>' : '')
         + (me
           ? `<a href="#/profile">${esc(me.name)}</a><a href="#/" onclick="logout()">Log out</a>`
@@ -884,7 +884,7 @@ const thumb = (p, n) => p.img
 
           ${emptyNote}
           ${sform()}
-
+          <p class="mut">Can't find your car? <a href="#/add-car">Add it here</a>.</p>
           <div class="card prev">
             <h2>Preview</h2>
             <div id="prev"><p class="mut">Select a car to see its picture here.</p></div>
@@ -1481,37 +1481,7 @@ const thumb = (p, n) => p.img
           <button>Save profile</button>
         </form>
 
-        <form class="card" onsubmit="return up(event)">
-          <h2>Share a 3D part</h2>
-          <fieldset class="tech">
-            <legend>Manufacturing technique</legend>
-            <div class="techbtns">
-              ${['CNC', 'FDM', 'SLS', 'SLA'].map(t => `
-                <label class="techbtn">
-                  <input type="radio" name="tech" value="${t}" required onchange="techChanged(this.value)">
-                  <span>${t}</span>
-                </label>`).join('')}
-            </div>
-            <p class="mut" id="techname">Choose how this part is made.</p>
-            <div id="techfields" class="filters"></div>
-          </fieldset>
-          <label>Part name<input name="name" required></label>
-          <label>OEM number (optional)<input name="oem" type="text" placeholder="e.g. 1J0 867 299"></label>
-          <label>Description<textarea name="d" rows="2" required></textarea></label>
-          <label>Fits<select name="g">${genOptions}</select></label>
-          <label>Category<select name="cat">${catOptions}</select></label>
-          <label>License
-            <select name="lic">
-              <option>CC-BY-SA-4.0</option>
-              <option>CC-BY-4.0</option>
-              <option>CC0</option>
-            </select>
-          </label>
-          <label>3D file (STL, 3MF or STEP)
-            <input name="file" type="file" accept=".stl,.3mf,.step,.stp" required>
-          </label>
-          <button>Publish as draft</button>
-        </form>
+        ${partFormHtml()}
         </div>
 
         <h2>My creations</h2>
@@ -1580,7 +1550,7 @@ const thumb = (p, n) => p.img
         toast('Published as a draft.');
       } catch (x) { toast(x.message); }
       btn.disabled = false;
-      profile();
+      route();
       return false;
     }
     
@@ -2127,6 +2097,166 @@ const thumb = (p, n) => p.img
       return html;
     }
 
+    /* ===== Post page: share a part + add a car, all in one place ===== */
+    let PT = { tab: 'part' };            // which tab is open on #/post
+    let UC = { brand: '', model: '' };   // remembers the last car choices
+
+    function partFormHtml() {
+      const genOptions = '<option value="">Choose the car it fits</option>'
+        + G.map(g => `<option value="${g.id}">${esc(gname(g.id))}</option>`).join('');
+      const catOptions = Object.keys(CAT).map(c => `<option>${c}</option>`).join('');
+      return `
+        <form class="card" onsubmit="return up(event)">
+          <h2>Share a 3D part</h2>
+          <fieldset class="tech">
+            <legend>Manufacturing technique</legend>
+            <div class="techbtns">
+              ${['CNC', 'FDM', 'SLS', 'SLA'].map(t => `
+                <label class="techbtn">
+                  <input type="radio" name="tech" value="${t}" required onchange="techChanged(this.value)">
+                  <span>${t}</span>
+                </label>`).join('')}
+            </div>
+            <p class="mut" id="techname">Choose how this part is made.</p>
+            <div id="techfields" class="filters"></div>
+          </fieldset>
+          <label>Part name<input name="name" required></label>
+          <label>Description<textarea name="d" rows="2" required></textarea></label>
+          <label>Fits<select name="g" required>${genOptions}</select></label>
+          <p class="mut" style="margin:0">Car missing from the list? <a href="#/post/car">Add it first</a>.</p>
+          <label>Category<select name="cat">${catOptions}</select></label>
+          <label>License
+            <select name="lic">
+              <option>CC-BY-SA-4.0</option>
+              <option>CC-BY-4.0</option>
+              <option>CC0</option>
+            </select>
+          </label>
+          <label>3D file (STL, 3MF or STEP)
+            <input name="file" type="file" accept=".stl,.3mf,.step,.stp" required>
+          </label>
+          <button>Publish as draft</button>
+        </form>`;
+    }
+
+    function carFormsHtml() {
+      const o = (v, label, cur) =>
+        `<option value="${esc(v)}"${String(v) === String(cur) ? ' selected' : ''}>${esc(label)}</option>`;
+      const brands = '<option value="">Choose a brand</option>' + B.map(b => o(b.id, b.n, UC.brand)).join('');
+      const models = '<option value="">Choose a model</option>' + M.map(m =>
+        o(m.model_id, (B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name, UC.model)).join('');
+      const photo = `<label>Photo of the car (optional)
+          <input type="file" accept="image/jpeg,image/png,image/webp" onchange="carPic(this)">
+          <input type="hidden" name="image_key">
+          <span class="mut" data-status>No photo selected</span>
+        </label>`;
+      return `
+        <p>Can't find your car in the list? Add its brand, model and generation here, in that order.
+          New entries appear for everyone straight away. You can add entries but not change them later, so check the details first.
+          Only upload photos you took yourself.</p>
+
+        <div class="card">
+          <h2>1. Brand</h2>
+          <form class="aform" onsubmit="return addBrandU(event)">
+            <label>Brand name<input name="n" required minlength="2" maxlength="60" placeholder="e.g. Volkswagen"></label>
+            <button>Add brand</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>2. Model</h2>
+          <form class="aform" onsubmit="return addModelU(event)">
+            <label>Brand<select name="b" required>${brands}</select></label>
+            <label>Model name<input name="n" required maxlength="60" placeholder="e.g. Golf"></label>
+            ${photo}
+            <button>Add model</button>
+          </form>
+        </div>
+
+        <div class="card">
+          <h2>3. Generation</h2>
+          <form class="aform" onsubmit="return addGenU(event)">
+            <label>Model<select name="m" required>${models}</select></label>
+            <label>Generation name (optional)<input name="n" maxlength="60" placeholder="e.g. Mk4"></label>
+            <label>Start year<input name="s" type="number" min="1900" max="2100" required placeholder="1997"></label>
+            <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
+            ${photo}
+            <button>Add generation</button>
+          </form>
+        </div>`;
+    }
+
+    function postPage(tab) {
+      if (!me) return gate();
+      if (tab) PT.tab = tab === 'car' ? 'car' : 'part';
+      view(`
+        <h1>Post</h1>
+        <div class="seg">
+          <button type="button" class="${PT.tab === 'part' ? '' : 'ghost'}" onclick="postTab('part')">Share a 3D part</button>
+          <button type="button" class="${PT.tab === 'car' ? '' : 'ghost'}" onclick="postTab('car')">Add a car</button>
+        </div>
+        ${PT.tab === 'car' ? carFormsHtml() : partFormHtml()}`);
+    }
+
+    function postTab(t) { PT.tab = t; postPage(); }
+
+    async function carPic(inp) {
+      const f = inp.files[0];
+      const label = inp.closest('label');
+      const key = label.querySelector('[name=image_key]');
+      const status = label.querySelector('[data-status]');
+      key.value = '';
+      if (!f) { status.textContent = 'No photo selected'; return; }
+      status.textContent = 'Uploading…';
+      try {
+        const u = await uploadRaw('image', f);
+        key.value = u.key;
+        status.textContent = 'Photo uploaded: ' + f.name;
+      } catch (e) {
+        status.textContent = e.message;
+        inp.value = '';
+      }
+    }
+
+    async function carAdd(e, url, body, okMsg, after) {
+      e.preventDefault();
+      const btn = e.target.querySelector('button');
+      btn.disabled = true;
+      try {
+        const r = await api('POST', url, body);
+        await load();
+        const go = after(r.id);
+        toast(okMsg);
+        if (go) location.hash = go; else postPage();
+      } catch (x) {
+        toast(x.message);
+        btn.disabled = false;
+      }
+    }
+
+    const addBrandU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/brands', { name: f.get('n') }, 'Brand added. Now add its models.',
+        id => { UC.brand = id; });
+      return false;
+    };
+
+    const addModelU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/models', { brand_id: +f.get('b'), name: f.get('n'), image_key: f.get('image_key') || '' },
+        'Model added. Now add its generation.',
+        id => { UC.brand = +f.get('b'); UC.model = id; });
+      return false;
+    };
+
+    const addGenU = e => {
+      const f = new FormData(e.target);
+      carAdd(e, '/api/generations', {
+        model_id: +f.get('m'), generation_name: f.get('n') || '', start_year: +f.get('s'),
+        end_year: +(f.get('e') || 0), image_key: f.get('image_key') || ''
+      }, 'Generation added.', id => '#/car/' + id);
+      return false;
+    };
 
     function admin() {
       if (!isAdmin) return home();
@@ -2295,6 +2425,7 @@ const thumb = (p, n) => p.img
         cart:    cartv,
         parts:   partsPage,
         faq:     faq,
+        post:    () => postPage(param),
         admin:   admin
       };
       (routes[page] || home)();

@@ -942,6 +942,100 @@ async def admin_import(data: ImportIn, request: Request):
     return {"ok": ok, "dry_run": data.dry_run, "applied": applied, "counts": n,
             "errors": errors[:50], "error_total": len(errors), "missing": missing_out}
 # ---------- End JSON import ----------
+# ---------- User-added cars (any logged-in user can add; only admins can edit or delete) ----------
+USER_DAILY_LIMIT = 30
+
+class UserBrandIn(BaseModel):
+    name: str
+
+class UserModelIn(BaseModel):
+    brand_id: int
+    name: str
+    image_key: str = ""
+
+class UserGenIn(BaseModel):
+    model_id: int
+    generation_name: str = ""
+    start_year: int
+    end_year: int = 0
+    image_key: str = ""
+
+def tidy(text, lo, hi, what):
+    out = " ".join((text or "").split())
+    if not (lo <= len(out) <= hi):
+        raise HTTPException(400, f"Enter a {what} ({lo} to {hi} characters).")
+    return out
+
+async def user_quota(env, uid):
+    rows = await q(env,
+        "SELECT (SELECT COUNT(*) FROM Brands WHERE created_by = ? AND created_at > datetime('now', '-1 day')) "
+        "+ (SELECT COUNT(*) FROM Models WHERE created_by = ? AND created_at > datetime('now', '-1 day')) "
+        "+ (SELECT COUNT(*) FROM Vehicle_Generations WHERE created_by = ? AND created_at > datetime('now', '-1 day')) AS n",
+        uid, uid, uid)
+    if rows[0]["n"] >= USER_DAILY_LIMIT:
+        raise HTTPException(429, f"You can add up to {USER_DAILY_LIMIT} items per day. Please try again tomorrow.")
+
+async def user_image_url(env, uid, key):
+    if not key:
+        return ""
+    if not key.startswith(f"images/{uid}/"):
+        raise HTTPException(400, "Invalid picture reference.")
+    if await env.BUCKET.head(key) is None:
+        raise HTTPException(400, "The uploaded picture was not found. Please upload it again.")
+    return public_url(env, key)
+
+@app.post("/api/brands")
+async def user_add_brand(data: UserBrandIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    name = tidy(data.name, 2, 60, "brand name")
+    for r in await q(env, "SELECT name FROM Brands"):
+        if r["name"].lower() == name.lower():
+            raise HTTPException(409, f"The brand '{r['name']}' already exists. Pick it from the list.")
+    await user_quota(env, user["user_id"])
+    rows = await q(env, "INSERT INTO Brands(name, created_by, created_at) "
+                        "VALUES(?, ?, datetime('now')) RETURNING brand_id", name, user["user_id"])
+    return {"id": rows[0]["brand_id"]}
+
+@app.post("/api/models")
+async def user_add_model(data: UserModelIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    name = tidy(data.name, 1, 60, "model name")
+    if not await q(env, "SELECT brand_id FROM Brands WHERE brand_id = ?", data.brand_id):
+        raise HTTPException(400, "Choose a valid brand.")
+    for r in await q(env, "SELECT name FROM Models WHERE brand_id = ?", data.brand_id):
+        if r["name"].lower() == name.lower():
+            raise HTTPException(409, f"The model '{r['name']}' already exists for this brand. Pick it from the list.")
+    await user_quota(env, user["user_id"])
+    pic = await user_image_url(env, user["user_id"], data.image_key)
+    rows = await q(env, "INSERT INTO Models(brand_id, name, picture_url, created_by, created_at) "
+                        "VALUES(?, ?, NULLIF(?, ''), ?, datetime('now')) RETURNING model_id",
+                   data.brand_id, name, pic, user["user_id"])
+    return {"id": rows[0]["model_id"]}
+
+@app.post("/api/generations")
+async def user_add_generation(data: UserGenIn, request: Request):
+    env = request.scope["env"]
+    user = await require_user(request)
+    gname = " ".join((data.generation_name or "").split())[:60]
+    if not (1900 <= data.start_year <= 2100):
+        raise HTTPException(400, "Enter a valid start year.")
+    if data.end_year and not (data.start_year <= data.end_year <= 2100):
+        raise HTTPException(400, "The end year cannot be before the start year.")
+    if not await q(env, "SELECT model_id FROM Models WHERE model_id = ?", data.model_id):
+        raise HTTPException(400, "Choose a valid model.")
+    for r in await q(env, "SELECT generation_name, start_year FROM Vehicle_Generations WHERE model_id = ?", data.model_id):
+        if r["start_year"] == data.start_year and (r["generation_name"] or "").lower() == gname.lower():
+            raise HTTPException(409, "This generation already exists for this model. Pick it from the list.")
+    await user_quota(env, user["user_id"])
+    pic = await user_image_url(env, user["user_id"], data.image_key)
+    rows = await q(env, "INSERT INTO Vehicle_Generations(model_id, generation_name, start_year, end_year, "
+                        "overview_image_url, created_by, created_at) "
+                        "VALUES(?, ?, ?, NULLIF(?, 0), NULLIF(?, ''), ?, datetime('now')) RETURNING generation_id",
+                   data.model_id, gname, data.start_year, data.end_year, pic, user["user_id"])
+    return {"id": rows[0]["generation_id"]}
+# ---------- End user-added cars ----------
 # ---------- End admin ----------
 SPEC_SCHEMA = {
     "FDM": {"label": "FDM (filament 3D printing)", "fields": [
