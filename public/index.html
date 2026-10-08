@@ -658,7 +658,6 @@
     header #nav a.btn.ghost { background: transparent; color: var(--acc); border: 1px solid var(--acc); }
     header #nav a.btn:not(.ghost) { background: var(--acc); color: var(--ink); border: 1px solid var(--acc); }
     main:has(.home-frame) { max-width: none; padding: 0; }
-    .home-frame { display: block; width: 100%; border: 0; background: #152d2e; }
         /* ---------- Button style taken from the ReClip story page ---------- */
     [hidden] { display: none !important; }
     button, .btn {
@@ -684,6 +683,33 @@
     header #nav a.btn.ghost:hover { background: #284647; }
     header .nav-toggle { min-height: 44px; border-radius: 3px; }
     header .nav-toggle:hover { background: #284647; }
+        /* ---------- Home page: header and footer float over the story, like on the landing page ---------- */
+    html.home-mode, html.home-mode body { overflow: hidden; height: 100%; }
+    .home-frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; background: #152d2e; z-index: 1; }
+    html.home-mode header {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+      padding: 30px 6.1vw; gap: 24px;
+      background: linear-gradient(#152d2e 20%, #152d2e00); border-bottom: 0;
+      pointer-events: none;
+    }
+    html.home-mode header a, html.home-mode header button, html.home-mode header.open #nav { pointer-events: auto; }
+    html.home-mode header .logo { font-size: 30px; font-weight: 700; letter-spacing: -1.5px; }
+    html.home-mode header #nav a:not(.btn) { color: #e2eae5; font-size: 14px; padding: 8px 0; border-bottom: 1px solid transparent; }
+    html.home-mode header #nav a:not(.btn):hover { border-bottom-color: var(--acc); }
+    html.home-mode footer {
+      position: fixed; left: 6.1vw; right: 6.1vw; bottom: 0; z-index: 30; height: 72px;
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 0; padding: 0; background: transparent; border: 0; border-top: 1px solid #b6e2d32a;
+      font-size: 10px; letter-spacing: 1.7px; color: #b5c9c1;
+      pointer-events: none;
+    }
+    html.home-mode footer a { color: #b5c9c1; text-decoration: none; pointer-events: auto; }
+    html.home-mode footer a:hover { color: #fff; }
+    @media (max-width: 700px) {
+      html.home-mode header { padding: 22px 7vw; gap: 10px; }
+      html.home-mode header .logo { font-size: 25px; }
+      html.home-mode footer { left: 7vw; right: 7vw; height: 58px; font-size: 8px; letter-spacing: 1px; }
+    }
   </style>
 </head>
 
@@ -965,18 +991,12 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Home & search
        ===================================================== */
-     function home() {
+    function home() {
+      document.documentElement.classList.add('home-mode');
       view(`<iframe id="home-frame" class="home-frame" src="/home.html" title="ReClip: old cars, new chapters"></iframe>`);
-      fitHomeFrame();
       const f = $('#home-frame');
       f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) {} });
     }
-    function fitHomeFrame() {
-      const f = document.getElementById('home-frame');
-      if (!f) return;
-      f.style.height = Math.max(320, innerHeight - document.querySelector('header').offsetHeight) + 'px';
-    }
-    addEventListener('resize', fitHomeFrame);
     function carsPage() {
       const brandOptions = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
       const emptyNote = B.length
@@ -2650,6 +2670,7 @@ const thumb = (p, n) => p.img
       const [, page, arg, mode, extra] = location.hash.split('/');
       const param = decodeURIComponent(arg || '');
       window.scrollTo(0, 0);
+      document.documentElement.classList.remove('home-mode');
       destroyPreview();
       if (EDIT) { flushSaves(); EDIT = null; }
 
