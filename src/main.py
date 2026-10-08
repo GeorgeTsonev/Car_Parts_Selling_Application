@@ -600,6 +600,92 @@ async def admin_delete_part(part_id: int, request: Request):
         except Exception:
             pass
     return {"ok": True}
+# ---------- Admin: replace a part's picture or 3D file by uploading ----------
+class PartImageIn(BaseModel):
+    image_key: str
+
+class PartFileIn(BaseModel):
+    file_key: str
+
+def r2_key_from_url(env, url):
+    base = str(env.PUBLIC_R2_URL).rstrip("/") + "/"
+    return url[len(base):] if url and url.startswith(base) else None
+
+async def drop_if_unused(env, key):
+    """Delete an old R2 object only when nothing in the database points to it any more."""
+    if not key:
+        return
+    url = public_url(env, key)
+    rows = await q(env,
+        "SELECT (SELECT COUNT(*) FROM Parts WHERE image_url = ?) "
+        "+ (SELECT COUNT(*) FROM Models WHERE picture_url = ?) "
+        "+ (SELECT COUNT(*) FROM Vehicle_Generations WHERE overview_image_url = ?) "
+        "+ (SELECT COUNT(*) FROM Brands WHERE logo_url = ?) "
+        "+ (SELECT COUNT(*) FROM Users WHERE avatar_url = ?) "
+        "+ (SELECT COUNT(*) FROM Part_Files WHERE r2_object_key = ?) AS n",
+        url, url, url, url, url, key)
+    if rows[0]["n"] == 0:
+        try:
+            await env.BUCKET.delete(key)
+        except Exception:
+            pass
+
+@app.put("/api/admin/parts/{part_id}/image")
+async def admin_part_image(part_id: int, data: PartImageIn, request: Request):
+    env = request.scope["env"]
+    admin = await require_admin(request)
+    rows = await q(env, "SELECT image_url FROM Parts WHERE part_id = ?", part_id)
+    if not rows:
+        raise HTTPException(404, "Part not found.")
+    key = data.image_key
+    if not key.startswith(f"images/{admin['user_id']}/"):
+        raise HTTPException(400, "Invalid picture reference.")
+    if await env.BUCKET.head(key) is None:
+        raise HTTPException(400, "The uploaded picture was not found. Please upload it again.")
+    await run(env, "UPDATE Parts SET image_url = ?, updated_at = CURRENT_TIMESTAMP WHERE part_id = ?",
+              public_url(env, key), part_id)
+    await drop_if_unused(env, r2_key_from_url(env, rows[0]["image_url"]))
+    return {"ok": True, "url": public_url(env, key)}
+
+@app.put("/api/admin/parts/{part_id}/file")
+async def admin_part_file(part_id: int, data: PartFileIn, request: Request):
+    env = request.scope["env"]
+    admin = await require_admin(request)
+    parts = await q(env, "SELECT manufacturing_specs FROM Parts WHERE part_id = ?", part_id)
+    if not parts:
+        raise HTTPException(404, "Part not found.")
+    key = data.file_key
+    if not key.startswith(f"parts/{admin['user_id']}/"):
+        raise HTTPException(400, "Invalid file reference.")
+    ext = key.rsplit(".", 1)[-1].lower()
+    if ext not in MODEL_EXT:
+        raise HTTPException(400, "The 3D file must be STL, 3MF or STEP.")
+    head = await env.BUCKET.head(key)
+    if head is None:
+        raise HTTPException(400, "The uploaded file was not found. Please upload it again.")
+    ftype = {"3mf": "mesh_3mf", "step": "cad_step", "stp": "cad_step"}.get(ext, "mesh_stl")
+    fname = key.rsplit("/", 1)[-1].split("-", 1)[-1]
+    old = await q(env, "SELECT file_id, r2_object_key FROM Part_Files WHERE part_id = ? "
+                       "ORDER BY file_id LIMIT 1", part_id)
+    if old:
+        # Same row, so download history stays attached to it.
+        await run(env, "UPDATE Part_Files SET file_type = ?, r2_object_key = ?, file_name = ?, "
+                       "file_size_bytes = ?, sha256_checksum = NULL WHERE file_id = ?",
+                  ftype, key, fname, int(head.size), old[0]["file_id"])
+        await drop_if_unused(env, old[0]["r2_object_key"])
+    else:
+        try:
+            specs = json.loads(parts[0]["manufacturing_specs"] or "{}")
+        except ValueError:
+            specs = {}
+        await run(env, "INSERT INTO Part_Files(part_id, file_type, r2_object_key, file_name, file_size_bytes, "
+                       "recommended_material, recommended_infill_pct, supports_required) "
+                       "VALUES(?, ?, ?, ?, ?, NULLIF(?, ''), ?, ?)",
+                  part_id, ftype, key, fname, int(head.size),
+                  PART_FILE_MATERIALS.get(specs.get("material", ""), ""),
+                  int(specs.get("infill_pct", 0) or 0), 1 if specs.get("supports") == "Yes" else 0)
+    return {"ok": True}
+# ---------- End replace files ----------
 class PinIn(BaseModel):
     part_id: int
     x: float | None = None
