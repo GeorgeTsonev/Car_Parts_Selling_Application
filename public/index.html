@@ -657,6 +657,33 @@
     }
     header #nav a.btn.ghost { background: transparent; color: var(--acc); border: 1px solid var(--acc); }
     header #nav a.btn:not(.ghost) { background: var(--acc); color: var(--ink); border: 1px solid var(--acc); }
+    main:has(.home-frame) { max-width: none; padding: 0; }
+    .home-frame { display: block; width: 100%; border: 0; background: #152d2e; }
+        /* ---------- Button style taken from the ReClip story page ---------- */
+    [hidden] { display: none !important; }
+    button, .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 12px;
+      min-height: 46px; padding: 12px 16px;
+      font-size: 14px; font-weight: 600; white-space: nowrap;
+      border-radius: 3px;
+      background: var(--acc); color: #152d2e; border: 1px solid var(--ink);
+      transition: background .15s ease-out, transform .15s ease-out;
+    }
+    button:hover, .btn:hover { background: #c9eddf; }
+    button:active, .btn:active { transform: translateY(1px); }
+    .ghost { background: transparent; color: var(--ink); border-color: var(--ink); }
+    .ghost:hover { background: rgba(21, 45, 35, .08); }
+    .alt { background: var(--ink); color: var(--acc); }
+    .alt:hover { background: #1d3839; }
+
+    /* In the dark header the buttons look exactly like on the story page (small size) */
+    header .btn { min-height: 43px; padding: 10px 17px; }
+    header #nav a.btn:not(.ghost) { background: var(--acc); color: #152d2e; border-color: var(--acc); }
+    header #nav a.btn:not(.ghost):hover { background: #c9eddf; }
+    header #nav a.btn.ghost { background: transparent; color: var(--acc); border-color: #64837e; }
+    header #nav a.btn.ghost:hover { background: #284647; }
+    header .nav-toggle { min-height: 44px; border-radius: 3px; }
+    header .nav-toggle:hover { background: #284647; }
   </style>
 </head>
 
@@ -938,12 +965,18 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Home & search
        ===================================================== */
-    function home() {
-      view(`<h1>Home</h1>
-            <h1>A cracked plastic clip shouldn't scrap a good car.</h1>
-            <p>Find parts discontinued for cars over ten years old. Buy them printed, or download the 3D file and print them yourself.</p>
-          `);
+     function home() {
+      view(`<iframe id="home-frame" class="home-frame" src="/home.html" title="ReClip: old cars, new chapters"></iframe>`);
+      fitHomeFrame();
+      const f = $('#home-frame');
+      f.addEventListener('load', () => { try { f.contentWindow.focus(); } catch (e) {} });
     }
+    function fitHomeFrame() {
+      const f = document.getElementById('home-frame');
+      if (!f) return;
+      f.style.height = Math.max(320, innerHeight - document.querySelector('header').offsetHeight) + 'px';
+    }
+    addEventListener('resize', fitHomeFrame);
     function carsPage() {
       const brandOptions = B.map(b => `<option value="${b.id}">${esc(b.n)}</option>`).join('');
       const emptyNote = B.length
