@@ -579,6 +579,29 @@
 
     /* Image areas */
     .pimg, .carcard img, .carcard .noimg, .th.big img { background: var(--soft); }
+    /* ---------- Colour changes, round 2 ---------- */
+
+    /* Footer matches the header */
+    footer { background: var(--ink); color: var(--acc); border-top: 0; }
+    footer a, footer a:visited { color: var(--acc); }
+    footer h2, footer h3, footer p, footer li, footer .mut { color: var(--acc); }
+    footer :focus-visible { outline-color: var(--acc); }
+
+    /* Home page: the "Car brand" and "Model" labels */
+    .pick label { color: #152D2E; }
+
+    /* "Select a car to see its picture here." gets the same colour as the "Preview" heading */
+    #prev .mut { color: var(--ink); }
+
+    /* Part tags (FDM, 3D file, status) get a white background */
+    .tag { background: #fff; }
+    .tag:not([class*="st-"]) { color: var(--ink); }
+
+    /* "Details" labels: OEM number, Technique, License, Author */
+    dl dt { color: #152D2E; }
+
+    /* Reset button on the parts page matches the Search button's height */
+    .filters > button { min-height: 44px; }
   </style>
 </head>
 
@@ -2214,7 +2237,7 @@ const thumb = (p, n) => p.img
           <label>Brand<select id="pf-b" onchange="partsFilter('b', this.value)"></select></label>
           <label>Model<select id="pf-m" onchange="partsFilter('m', this.value)"></select></label>
           <label>Generation<select id="pf-g" onchange="partsFilter('g', this.value)"></select></label>
-          <button type="button" class="ghost" onclick="partsReset()">Reset</button>
+          <button type="button" onclick="partsReset()">Reset</button>
         </div>
         <p class="mut" id="pf-count"></p>
         <div id="pf-list"></div>`);
