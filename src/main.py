@@ -415,7 +415,7 @@ async def set_avatar(data: AvatarIn, request: Request):
     return public_user(rows[0])
 # ---------- End uploads ----------
 async def public_files(env):
-    rows = await q(env, "SELECT file_id, part_id, file_type, file_name, r2_object_key, "
+    rows = await q(env, "SELECT file_id, part_id, file_type, file_name, file_size_bytes, r2_object_key, "
                         "recommended_material, recommended_infill_pct, supports_required FROM Part_Files")
     for r in rows:
         r["url"] = public_url(env, r.pop("r2_object_key"))
