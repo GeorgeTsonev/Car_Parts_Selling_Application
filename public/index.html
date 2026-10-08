@@ -1437,15 +1437,6 @@ const thumb = (p, n) => p.img
       nav();
       location.hash = '#/';
     }
-    async function sync() {
-      const { id, ...data } = me;
-      try {
-        await db.collection('users').doc(uid).set(data);
-        U[uid] = data;
-      } catch (e) {
-        toast('Could not save your profile.');
-      }
-    }
 
     function profile() {
       if (!me) {
@@ -1453,14 +1444,11 @@ const thumb = (p, n) => p.img
         return (location.hash = '#/login');
       }
 
-      const mine = P.filter(p => p.owner == uid);
+      const mine = P.filter(p => p.owner == me.id);
 
       const avatar = me.pic
         ? `<img src="${me.pic}" alt="Profile picture">`
         : esc(me.name[0].toUpperCase());
-
-      const genOptions = G.map(g => `<option value="${g.id}">${esc(gname(g.id))}</option>`).join('');
-      const catOptions = Object.keys(CAT).map(c => `<option>${c}</option>`).join('');
 
       view(`
         <div class="card prof">
