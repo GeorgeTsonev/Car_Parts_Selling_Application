@@ -271,9 +271,9 @@ CATEGORIES = {"interior", "exterior", "underhood", "trim_clip", "lighting_bracke
 LICENSES = {"CC0", "CC-BY-4.0", "CC-BY-SA-4.0", "CERN-OHL-P-2.0", "CERN-OHL-S-2.0"}
 MATERIALS = {"PLA", "PETG", "ABS", "ASA", "PA_CF", "TPU"}
 MODEL_EXT = {"stl", "3mf", "step", "stp"}
-IMAGE_EXT = {"jpg", "jpeg", "png", "webp"}
+IMAGE_EXT = {"jpg", "jpeg", "png", "webp","jfif"}
 LIMITS = {"model": 25 * 1024 * 1024, "image": 5 * 1024 * 1024, "avatar": 2 * 1024 * 1024}
-CTYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+CTYPES = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp", "jfif": "image/jpeg"}
 
 
 class PartIn(BaseModel):

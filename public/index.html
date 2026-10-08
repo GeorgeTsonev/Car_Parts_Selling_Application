@@ -1853,10 +1853,7 @@ const thumb = (p, n) => p.img
           </div>
           <form class="aform" onsubmit="return editP(event, ${p.id})">
             <label>Printed price (€)<input name="price" type="number" step="0.01" min="0" placeholder="e.g. 4.50" value="${p.price || ''}"></label>
-            <label>Picture URL
-              <input name="img" data-url placeholder="https://..." value="${esc(p.img)}">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
-            </label>
+            <label>Picture URL<input name="img" placeholder="https://..." value="${esc(p.img)}"></label>
             <label>OEM number<input name="oem" placeholder="optional" value="${esc(p.oem)}"></label>
             <label><span>Sold as printed part</span><input name="phys" type="checkbox" style="width:auto"${p.k != 'print' ? ' checked' : ''}></label>
             <button>Save details</button>
@@ -1865,7 +1862,7 @@ const thumb = (p, n) => p.img
           <div class="aform">
             <h3>Replace files (3D file: ${p.file ? esc(p.file.file_name) : 'none yet'})</h3>
             <label>New picture (JPEG, PNG or WebP)
-              <input id="rp-image-${p.id}" type="file" accept="image/jpeg,image/png,image/webp">
+              <input id="rp-image-${p.id}" type="file" accept="image/jpeg,image/png,image/webp,.jfif">
             </label>
             <button type="button" onclick="adminReplace(${p.id}, 'image')">Upload picture</button>
             <label>New 3D file (STL, 3MF or STEP)
@@ -1951,7 +1948,7 @@ const thumb = (p, n) => p.img
           <label>Model name<input name="n" placeholder="e.g. Golf" required></label>
           <label>Model picture (optional)
             <input name="pic" data-url placeholder="https://... or choose a file below">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
           </label>
           <button>Add model</button>
         </form>`,
@@ -1964,7 +1961,7 @@ const thumb = (p, n) => p.img
           <label>End year (optional)<input name="e" type="number" min="1900" max="2100" placeholder="2003"></label>
           <label>Generation photo (optional)
             <input name="img" data-url placeholder="https://... or choose a file below">
-            <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+            <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
           </label>
           <button>Add generation</button>
         </form>`
@@ -1993,7 +1990,7 @@ const thumb = (p, n) => p.img
             <label>Model name<input name="n" value="${esc(m.name)}" required></label>
             <label>Model picture
               <input name="pic" data-url value="${esc(m.picture_url || '')}" placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+              <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
             </label>
             <button>Save changes</button>
             <button type="button" class="danger" onclick="delM()">Delete model</button>
@@ -2022,7 +2019,7 @@ const thumb = (p, n) => p.img
             <label>End year (optional)<input name="e" type="number" min="1900" max="2100" value="${esc(g.end_year || '')}"></label>
             <label>Generation photo
               <input name="img" data-url value="${esc(g.overview_image_url || '')}" placeholder="https://... or choose a file below">
-              <input type="file" accept="image/jpeg,image/png,image/webp" onchange="adminPic(this)">
+              <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="adminPic(this)">
             </label>
             <button>Save changes</button>
             <button type="button" class="danger" onclick="delG()">Delete generation</button>
@@ -2332,7 +2329,7 @@ const thumb = (p, n) => p.img
       const models = '<option value="">Choose a model</option>' + M.map(m =>
         o(m.model_id, (B.find(b => b.id == m.brand_id)?.n || '') + ' ' + m.name, UC.model)).join('');
       const photo = `<label>Photo of the car (optional)
-          <input type="file" accept="image/jpeg,image/png,image/webp" onchange="carPic(this)">
+          <input type="file" accept="image/jpeg,image/png,image/webp,.jfif" onchange="carPic(this)">
           <input type="hidden" name="image_key">
           <span class="mut" data-status>No photo selected</span>
         </label>`;
