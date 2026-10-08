@@ -603,6 +603,7 @@
     /* Reset button on the parts page matches the Search button's height */
     .filters > button { min-height: 44px; }
     .pgrid.two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .profile-parts { min-width: 0; align-self: start; }
   </style>
 </head>
 
@@ -1462,6 +1463,7 @@ const thumb = (p, n) => p.img
           </div>
         </div>
 
+
         <div class="profile-forms">
         <form class="card profile-about" onsubmit="return save(event)">
           <h2>About you</h2>
@@ -1470,17 +1472,20 @@ const thumb = (p, n) => p.img
           <button>Save profile</button>
         </form>
 
-                <div class="carhead">
-          <h2>My parts</h2>
-          <a class="btn" href="#/post">Post a part</a>
+
+        <div class="profile-parts">
+          <div class="carhead">
+            <h2>My parts</h2>
+            <a class="btn" href="#/post">Post a part</a>
+          </div>
+          ${mine.length
+            ? `<div class="pgrid two">${mine.slice()
+                .sort((a, b) => (b.added || '').localeCompare(a.added || '') || b.id - a.id)
+                .map(p => pcard(p)).join('')}</div>`
+            : '<p class="mut">You have not posted any parts yet. <a href="#/post">Post your first part</a>.</p>'}
         </div>
-        ${mine.length
-          ? `<div class="pgrid two">${mine.slice()
-              .sort((a, b) => (b.added || '').localeCompare(a.added || '') || b.id - a.id)
-              .map(p => pcard(p)).join('')}</div>`
-          : '<p class="mut">You have not posted any parts yet. <a href="#/post">Post your first part</a>.</p>'}
         </div>
-        `);
+      `);
     }
 
     async function save(e) {
