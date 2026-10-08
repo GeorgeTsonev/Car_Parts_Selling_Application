@@ -2331,7 +2331,7 @@ const thumb = (p, n) => p.img
     /* =====================================================
        Routing & startup
        ===================================================== */
-    function faq() {
+      function faq() {
       view(`
         <h1>Frequently asked questions</h1>
         <section class="card">
@@ -2340,7 +2340,15 @@ const thumb = (p, n) => p.img
         </section>
         <section class="card">
           <h2>How do I share a part?</h2>
-          <p>Create an account or log in, then open your <a href="#/profile">profile</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and car fitment, and upload an STL, 3MF or STEP file. Your part is published as a draft.</p>
+          <p>Create an account or log in, then open the <a href="#/post">Post page</a> and fill in “Share a 3D part”. Choose a manufacturing technique, add the part details and the car it fits, and upload an STL, 3MF or STEP file. Your part is published as a draft. You can see all your parts on your <a href="#/profile">profile</a>.</p>
+        </section>
+        <section class="card">
+          <h2>My car is not in the list. What can I do?</h2>
+          <p>Open the <a href="#/post/car">Add a car</a> tab on the Post page and add the brand, model and generation, in that order. You can add a photo you took yourself. New cars appear for everyone straight away. You can add entries but not change them afterwards, so check the details first.</p>
+        </section>
+        <section class="card">
+          <h2>What do the status labels mean?</h2>
+          <p>A new part starts as <b>Draft</b>. It can later be marked <b>Community tested</b> or <b>Verified fit</b> once its fit has been confirmed, or <b>Flagged</b> if there is a problem with it.</p>
         </section>
         <section class="card">
           <h2>Do I need an OEM number?</h2>
